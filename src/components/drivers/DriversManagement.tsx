@@ -37,6 +37,7 @@ export function DriversManagement() {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string>('')
   const [selectedDriverUserId, setSelectedDriverUserId] = useState<string>('')
+  const [selectedDriverName, setSelectedDriverName] = useState<string>('')
   const [creatingDriver, setCreatingDriver] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   
@@ -443,30 +444,41 @@ export function DriversManagement() {
     try {
       console.log('🔑 [PASSWORD] Alterando senha para usuário:', selectedDriverUserId)
 
+      // Usar função RPC para alterar senha
       const { data, error } = await supabase.rpc('change_user_password', {
         target_user_id: selectedDriverUserId,
         new_password: newPassword.trim()
       })
 
       if (error) {
-        console.error('❌ [PASSWORD] Erro:', error)
-        throw new Error('Erro ao alterar senha. Tente novamente.')
+        console.error('❌ [PASSWORD] Erro RPC:', error)
+        throw new Error(`Erro ao alterar senha: ${error.message}`)
+      }
+
+      console.log('📋 [PASSWORD] Resposta da função:', data)
+
+      // Verificar resposta da função
+      if (data && typeof data === 'object') {
+        if (data.success === false) {
+          throw new Error(data.error || 'Erro desconhecido')
+        }
       }
 
       console.log('✅ [PASSWORD] Senha alterada com sucesso')
       
       toast.dismiss(loadingToast)
-      toast.success('Senha alterada com sucesso!')
+      toast.success(`Senha de ${selectedDriverName} alterada com sucesso!`)
       
       setShowPasswordDialog(false)
       setNewPassword('')
       setSelectedDriverId('')
       setSelectedDriverUserId('')
+      setSelectedDriverName('')
 
     } catch (error: any) {
       console.error('❌ [PASSWORD] Erro:', error)
       toast.dismiss(loadingToast)
-      toast.error('Funcionalidade temporariamente indisponível')
+      toast.error(error.message || 'Erro ao alterar senha')
     } finally {
       setChangingPassword(false)
     }
@@ -715,9 +727,11 @@ export function DriversManagement() {
                         onClick={() => {
                           setSelectedDriverId(driver.id)
                           setSelectedDriverUserId(driver.user_id)
+                          setSelectedDriverName(driver.profiles.full_name)
                           setShowPasswordDialog(true)
                         }}
                         className="rounded-xl"
+                        title={`Alterar senha de ${driver.profiles.full_name}`}
                       >
                         <Key className="w-4 h-4" />
                       </Button>
@@ -726,6 +740,7 @@ export function DriversManagement() {
                         size="sm"
                         onClick={() => deleteDriver(driver.id, driver.user_id)}
                         className="rounded-xl text-red-600 hover:text-red-700"
+                        title={`Excluir ${driver.profiles.full_name}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -757,12 +772,13 @@ export function DriversManagement() {
         </Card>
       </div>
 
+      {/* Dialog senha - AGORA HABILITADO */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Alterar Senha</DialogTitle>
             <DialogDescription>
-              Funcionalidade temporariamente indisponível
+              Alterar senha de acesso de {selectedDriverName}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -775,8 +791,11 @@ export function DriversManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Nova senha (mínimo 6 caracteres)"
                 className="rounded-xl"
-                disabled={true}
+                disabled={changingPassword}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                A senha não pode conter espaços
+              </p>
             </div>
             <div className="flex gap-2 pt-4">
               <Button
@@ -786,17 +805,19 @@ export function DriversManagement() {
                   setNewPassword('')
                   setSelectedDriverId('')
                   setSelectedDriverUserId('')
+                  setSelectedDriverName('')
                 }}
                 className="flex-1 rounded-xl"
+                disabled={changingPassword}
               >
-                Fechar
+                Cancelar
               </Button>
               <Button
                 onClick={changePassword}
                 className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
-                disabled={true}
+                disabled={changingPassword || !newPassword.trim()}
               >
-                Indisponível
+                {changingPassword ? 'Alterando...' : 'Alterar Senha'}
               </Button>
             </div>
           </div>
