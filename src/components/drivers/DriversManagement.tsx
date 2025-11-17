@@ -456,74 +456,81 @@ export function DriversManagement() {
   const deleteDriver = async (driverId: string, userId: string) => {
     if (!confirm('Tem certeza que deseja excluir este entregador? Esta ação não pode ser desfeita.')) return
 
+    const loadingToast = toast.loading('Excluindo entregador...')
+
     try {
-      console.log(`Iniciando exclusão do entregador ID: ${driverId}, User ID: ${userId}`)
+      console.log(`🗑️ Iniciando exclusão do entregador ID: ${driverId}, User ID: ${userId}`)
 
       // Primeiro, remover da lista local para feedback imediato
+      const originalDrivers = [...drivers]
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
-      toast.loading('Excluindo entregador...')
+
+      // Verificar se usuário tem permissão (é admin)
+      console.log('🔍 Verificando permissões do usuário...')
+      const { data: userRole, error: roleError } = await supabase
+        .from('user_organizations')
+        .select('role, organization_id')
+        .eq('user_id', user?.id)
+        .single()
+
+      if (roleError || !userRole) {
+        console.error('❌ Erro ao verificar permissões:', roleError)
+        throw new Error('Erro ao verificar permissões do usuário')
+      }
+
+      if (userRole.role !== 'admin') {
+        throw new Error('Apenas administradores podem excluir entregadores')
+      }
+
+      console.log('✅ Usuário tem permissão de admin')
 
       // 1. Deletar registro de entregador
-      console.log('Deletando registro de delivery_drivers...')
-      const { error: driverError } = await supabase
+      console.log('🗑️ Deletando registro de delivery_drivers...')
+      const { error: driverError, count: driverCount } = await supabase
         .from('delivery_drivers')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', driverId)
 
       if (driverError) {
-        console.error('Erro ao deletar delivery_drivers:', driverError)
+        console.error('❌ Erro ao deletar delivery_drivers:', driverError)
         throw new Error(`Erro ao deletar entregador: ${driverError.message}`)
       }
 
-      console.log('Registro de delivery_drivers deletado com sucesso')
+      console.log(`✅ Registro de delivery_drivers deletado. Linhas afetadas: ${driverCount}`)
 
-      // 2. Deletar todos os vínculos com organizações
-      console.log('Deletando vínculos com organizações...')
-      const { error: orgError } = await supabase
+      if (driverCount === 0) {
+        throw new Error('Entregador não encontrado ou sem permissão para deletar')
+      }
+
+      // 2. Deletar vínculos com organizações
+      console.log('🗑️ Deletando vínculos com organizações...')
+      const { error: orgError, count: orgCount } = await supabase
         .from('user_organizations')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('user_id', userId)
+        .eq('role', 'delivery_driver')
 
       if (orgError) {
-        console.error('Erro ao deletar user_organizations:', orgError)
+        console.error('⚠️ Erro ao deletar user_organizations:', orgError)
         // Não falhar por isso, continuar
       } else {
-        console.log('Vínculos com organizações deletados com sucesso')
+        console.log(`✅ Vínculos com organizações deletados. Linhas afetadas: ${orgCount}`)
       }
 
-      // 3. Opcionalmente, deletar perfil (comentado para preservar dados)
-      /*
-      console.log('Deletando perfil...')
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId)
-
-      if (profileError) {
-        console.error('Erro ao deletar profile:', profileError)
-      } else {
-        console.log('Perfil deletado com sucesso')
-      }
-      */
-
-      // 4. Deletar usuário do Auth (requer service role)
-      // Isso seria feito via Edge Function ou Admin API
-      console.log('Usuário removido do sistema (perfil mantido para histórico)')
-
-      toast.dismiss()
+      toast.dismiss(loadingToast)
       toast.success('Entregador excluído com sucesso!')
       
-      // Recarregar lista para garantir consistência
-      console.log('Recarregando lista de entregadores...')
-      await loadDrivers()
+      console.log('✅ Exclusão concluída com sucesso')
 
     } catch (error: any) {
-      console.error('Erro ao excluir entregador:', error)
-      toast.dismiss()
+      console.error('❌ Erro ao excluir entregador:', error)
+      toast.dismiss(loadingToast)
       toast.error(error.message || 'Erro ao excluir entregador')
       
-      // Recarregar lista em caso de erro para restaurar estado
-      await loadDrivers()
+      // Restaurar lista original em caso de erro
+      setDrivers(originalDrivers)
+      
+      console.log('🔄 Lista restaurada devido ao erro')
     }
   }
 
@@ -708,6 +715,7 @@ export function DriversManagement() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              
               <div className="text-3xl font-bold text-blue-600">
                 R$ {drivers.reduce((sum, driver) => sum + driver.total_today, 0).toFixed(2)}
               </div>
@@ -749,7 +757,6 @@ export function DriversManagement() {
                       </h3>
                       <p className="text-sm text-gray-600">
                         {driver.profiles.phone} • {driver.profiles.email}
-                      
                       </p>
                       {driver.current_latitude && driver.current_longitude && (
                         <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
