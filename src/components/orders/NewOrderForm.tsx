@@ -72,7 +72,7 @@ export function NewOrderForm() {
 
   useEffect(() => {
     loadOrganizations()
-    loadDeliveryDrivers() // Carregar entregadores imediatamente
+    loadDeliveryDrivers()
   }, [user])
 
   const loadOrganizations = async () => {
@@ -119,12 +119,35 @@ export function NewOrderForm() {
   }
 
   const loadDeliveryDrivers = async () => {
+    if (!user) return
+
     setLoadingDrivers(true)
     
     try {
       console.log('🚚 [ENTREGADORES] Iniciando carregamento de entregadores...')
 
-      // ESTRATÉGIA SIMPLES: Buscar TODOS os entregadores primeiro
+      // PASSO 1: Buscar organizações do usuário
+      const { data: userOrgs, error: userOrgsError } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+      if (userOrgsError) {
+        console.error('❌ [ENTREGADORES] Erro ao buscar organizações:', userOrgsError)
+        setDeliveryDrivers([])
+        return
+      }
+
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+      console.log('🏢 [ENTREGADORES] Organizações encontradas:', orgIds)
+
+      if (orgIds.length === 0) {
+        console.log('📭 [ENTREGADORES] Usuário sem organizações')
+        setDeliveryDrivers([])
+        return
+      }
+
+      // PASSO 2: Buscar entregadores das organizações
       const { data: driversData, error: driversError } = await supabase
         .from('delivery_drivers')
         .select(`
@@ -134,6 +157,8 @@ export function NewOrderForm() {
           total_today,
           organization_id
         `)
+        .in('organization_id', orgIds)
+        .order('is_online', { ascending: false }) // Online primeiro
 
       console.log('📊 [ENTREGADORES] Resultado da query:')
       console.log('   - Erro:', driversError)
@@ -142,57 +167,19 @@ export function NewOrderForm() {
 
       if (driversError) {
         console.error('❌ [ENTREGADORES] Erro na query de entregadores:', driversError)
-        throw driversError
+        setDeliveryDrivers([])
+        return
       }
 
-      // Se não encontrou entregadores no banco, usar dados de exemplo
       if (!driversData || driversData.length === 0) {
-        console.log('📭 [ENTREGADORES] Nenhum entregador no banco. Usando dados de exemplo...')
-        
-        const exampleDrivers: DeliveryDriver[] = [
-          {
-            id: 'example-driver-1',
-            user_id: 'example-user-1',
-            is_online: true,
-            total_today: 150.50,
-            profiles: {
-              full_name: 'João Silva - Motoboy',
-              phone: '(31) 99999-1111',
-              email: 'joao.motoboy@exemplo.com'
-            }
-          },
-          {
-            id: 'example-driver-2',
-            user_id: 'example-user-2',
-            is_online: true,
-            total_today: 89.30,
-            profiles: {
-              full_name: 'Maria Santos - Entregadora',
-              phone: '(31) 99999-2222',
-              email: 'maria.entregadora@exemplo.com'
-            }
-          },
-          {
-            id: 'example-driver-3',
-            user_id: 'example-user-3',
-            is_online: false,
-            total_today: 220.75,
-            profiles: {
-              full_name: 'Pedro Costa - Delivery',
-              phone: '(31) 99999-3333',
-              email: 'pedro.delivery@exemplo.com'
-            }
-          }
-        ]
-        
-        setDeliveryDrivers(exampleDrivers)
-        console.log('✅ [ENTREGADORES] Dados de exemplo carregados:', exampleDrivers.length)
+        console.log('📭 [ENTREGADORES] Nenhum entregador encontrado no banco')
+        setDeliveryDrivers([])
         return
       }
 
       console.log('📋 [ENTREGADORES] Entregadores encontrados no banco:', driversData.length)
 
-      // Buscar perfis dos entregadores
+      // PASSO 3: Buscar perfis dos entregadores
       const userIds = driversData.map(driver => driver.user_id).filter(Boolean)
       console.log('👤 [ENTREGADORES] Buscando perfis para user_ids:', userIds)
 
@@ -221,7 +208,7 @@ export function NewOrderForm() {
         console.error('⚠️ [ENTREGADORES] Erro ao buscar perfis:', profilesError)
       }
 
-      // Combinar dados de entregadores com perfis
+      // PASSO 4: Combinar dados de entregadores com perfis
       const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
@@ -253,35 +240,7 @@ export function NewOrderForm() {
 
     } catch (error) {
       console.error('❌ [ENTREGADORES] Erro geral:', error)
-      
-      // Fallback garantido - sempre ter dados para mostrar
-      const fallbackDrivers: DeliveryDriver[] = [
-        {
-          id: 'fallback-1',
-          user_id: 'fallback-user-1',
-          is_online: true,
-          total_today: 125.00,
-          profiles: {
-            full_name: 'Entregador Disponível',
-            phone: '(31) 99999-0001',
-            email: 'disponivel@exemplo.com'
-          }
-        },
-        {
-          id: 'fallback-2',
-          user_id: 'fallback-user-2',
-          is_online: true,
-          total_today: 95.50,
-          profiles: {
-            full_name: 'Motoboy Ativo',
-            phone: '(31) 99999-0002',
-            email: 'motoboy@exemplo.com'
-          }
-        }
-      ]
-      
-      setDeliveryDrivers(fallbackDrivers)
-      console.log('🔄 [ENTREGADORES] Fallback ativado com', fallbackDrivers.length, 'entregadores')
+      setDeliveryDrivers([])
       
     } finally {
       setLoadingDrivers(false)
@@ -431,7 +390,7 @@ export function NewOrderForm() {
                 )}
               </div>
 
-              {/* SEÇÃO ENTREGADOR RESPONSÁVEL - RECRIADA */}
+              {/* SEÇÃO ENTREGADOR RESPONSÁVEL - CORRIGIDA */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-base font-medium">
                   <Bike className="w-5 h-5 text-blue-600" />
@@ -468,7 +427,7 @@ export function NewOrderForm() {
                       </div>
                     </SelectItem>
                     
-                    {/* Lista de Entregadores */}
+                    {/* Lista de Entregadores REAIS */}
                     {deliveryDrivers.map((driver) => (
                       <SelectItem key={driver.id} value={driver.id} className="py-3">
                         <div className="flex items-center gap-3 w-full">
@@ -537,6 +496,17 @@ export function NewOrderForm() {
                         <span className="text-lg">⚠️</span>
                         <span className="text-sm font-medium">
                           Nenhum entregador online no momento. O pedido ficará pendente até ser atribuído.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {deliveryDrivers.length === 0 && !loadingDrivers && (
+                    <div className="mt-3 p-3 bg-red-100 rounded-lg border border-red-200">
+                      <div className="flex items-center gap-2 text-red-700">
+                        <span className="text-lg">❌</span>
+                        <span className="text-sm font-medium">
+                          Nenhum entregador cadastrado. Cadastre entregadores primeiro na seção "Entregadores".
                         </span>
                       </div>
                     </div>
