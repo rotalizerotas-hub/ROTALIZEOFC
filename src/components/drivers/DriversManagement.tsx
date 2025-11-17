@@ -110,68 +110,123 @@ export function DriversManagement() {
   const ensureUserHasOrganization = async (): Promise<string> => {
     if (!user) throw new Error('Usuário não autenticado')
 
+    console.log('Verificando organizações do usuário...')
+
     // Verificar se usuário já tem organização
-    const { data: userOrgs } = await supabase
+    const { data: userOrgs, error: userOrgsError } = await supabase
       .from('user_organizations')
       .select('organization_id')
       .eq('user_id', user.id)
       .limit(1)
 
+    if (userOrgsError) {
+      console.error('Erro ao buscar organizações:', userOrgsError)
+      throw new Error('Erro ao verificar organizações do usuário')
+    }
+
     if (userOrgs && userOrgs.length > 0) {
+      console.log('Organização encontrada:', userOrgs[0].organization_id)
       return userOrgs[0].organization_id
     }
 
-    // Criar organização padrão se não existir
-    const { data: establishmentTypes } = await supabase
-      .from('establishment_types')
-      .select('id')
-      .limit(1)
+    console.log('Usuário não possui organização. Criando organização padrão...')
 
-    let establishmentTypeId = establishmentTypes?.[0]?.id
-
-    if (!establishmentTypeId) {
-      // Criar tipo de estabelecimento padrão
-      const { data: newType } = await supabase
+    try {
+      // Buscar um tipo de estabelecimento padrão
+      const { data: establishmentTypes, error: etError } = await supabase
         .from('establishment_types')
-        .insert({
-          name: 'Estabelecimento Geral',
-          icon_url: '/icons/default.png',
-          emoji: '🏪'
-        })
-        .select()
-        .single()
+        .select('id, name')
+        .limit(1)
 
-      establishmentTypeId = newType?.id
-    }
+      if (etError) {
+        console.error('Erro ao buscar tipos de estabelecimento:', etError)
+        throw new Error(`Erro ao buscar tipos de estabelecimento: ${etError.message}`)
+      }
 
-    // Criar organização
-    const { data: newOrg, error: orgError } = await supabase
-      .from('organizations')
-      .insert({
+      let establishmentTypeId = establishmentTypes?.[0]?.id
+
+      if (!establishmentTypeId) {
+        console.log('Nenhum tipo de estabelecimento encontrado. Criando tipo padrão...')
+        
+        // Criar tipo de estabelecimento padrão
+        const { data: newType, error: newTypeError } = await supabase
+          .from('establishment_types')
+          .insert({
+            name: 'Estabelecimento Geral',
+            icon_url: '/icons/default.png',
+            emoji: '🏪'
+          })
+          .select()
+          .single()
+
+        if (newTypeError) {
+          console.error('Erro ao criar tipo de estabelecimento:', newTypeError)
+          throw new Error(`Erro ao criar tipo de estabelecimento: ${newTypeError.message}`)
+        }
+
+        if (!newType) {
+          throw new Error('Tipo de estabelecimento não foi criado')
+        }
+
+        establishmentTypeId = newType.id
+        console.log('Tipo de estabelecimento criado:', establishmentTypeId)
+      }
+
+      console.log('Usando tipo de estabelecimento:', establishmentTypeId)
+
+      // Criar organização padrão
+      const orgData = {
         name: 'Minha Empresa',
         address: 'Endereço da empresa',
         phone: '(31) 99999-9999',
         establishment_type_id: establishmentTypeId,
         latitude: -18.5122,
         longitude: -44.5550
-      })
-      .select()
-      .single()
+      }
 
-    if (orgError || !newOrg) {
-      throw new Error('Erro ao criar organização')
+      console.log('Criando organização com dados:', orgData)
+
+      const { data: newOrg, error: orgError } = await supabase
+        .from('organizations')
+        .insert(orgData)
+        .select()
+        .single()
+
+      if (orgError) {
+        console.error('Erro detalhado ao criar organização:', orgError)
+        throw new Error(`Erro ao criar organização: ${orgError.message}`)
+      }
+
+      if (!newOrg) {
+        throw new Error('Organização não foi criada - resposta vazia')
+      }
+
+      console.log('Organização criada com sucesso:', newOrg.id)
+
+      // Vincular usuário à organização como admin
+      const { error: userOrgError } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: user.id,
+          organization_id: newOrg.id,
+          role: 'admin'
+        })
+
+      if (userOrgError) {
+        console.error('Erro ao vincular usuário à organização:', userOrgError)
+        // Tentar limpar a organização criada
+        await supabase.from('organizations').delete().eq('id', newOrg.id)
+        throw new Error(`Erro ao vincular usuário à organização: ${userOrgError.message}`)
+      }
+
+      console.log('Usuário vinculado à organização como admin')
+      toast.success('Organização padrão criada com sucesso!')
+      return newOrg.id
+
+    } catch (error: any) {
+      console.error('Erro no processo de criação de organização:', error)
+      throw new Error(error.message || 'Erro ao criar organização padrão')
     }
-
-    // Vincular usuário à organização
-    await supabase
-      .from('user_organizations')
-      .insert({
-        user_id: user.id,
-        organization_id: newOrg.id,
-        role: 'admin'
-      })
-
-    return newOrg.id
   }
 
   const createNewDriver = async () => {
