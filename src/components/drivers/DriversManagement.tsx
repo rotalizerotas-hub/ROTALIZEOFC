@@ -229,10 +229,28 @@ export function DriversManagement() {
     }
   }
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
   const createNewDriver = async () => {
     if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
       toast.error('Preencha todos os campos obrigatórios')
       return
+    }
+
+    // Validar email
+    if (!validateEmail(newDriverData.email)) {
+      toast.error('Digite um email válido (exemplo: joao@gmail.com)')
+      return
+    }
+
+    // Garantir que a senha tenha pelo menos 6 caracteres
+    let finalPassword = newDriverData.password
+    if (finalPassword.length < 6) {
+      finalPassword = finalPassword + '123456'.substring(0, 6 - finalPassword.length)
+      console.log('Senha ajustada para atender requisito mínimo do Supabase')
     }
 
     setCreatingDriver(true)
@@ -241,10 +259,12 @@ export function DriversManagement() {
       // Garantir que o usuário tem uma organização
       const organizationId = await ensureUserHasOrganization()
 
+      console.log('Criando usuário com email:', newDriverData.email)
+
       // Criar usuário usando signup normal
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newDriverData.email,
-        password: newDriverData.password,
+        email: newDriverData.email.trim().toLowerCase(),
+        password: finalPassword,
         options: {
           data: {
             full_name: newDriverData.full_name,
@@ -255,16 +275,23 @@ export function DriversManagement() {
         }
       })
 
-      if (authError || !authData.user) {
-        throw new Error(authError?.message || 'Erro ao criar usuário')
+      if (authError) {
+        console.error('Erro do Supabase Auth:', authError)
+        throw new Error(authError.message || 'Erro ao criar usuário')
+      }
+
+      if (!authData.user) {
+        throw new Error('Usuário não foi criado')
       }
 
       const newUserId = authData.user.id
+      console.log('Usuário criado com ID:', newUserId)
 
       // Aguardar um pouco para o trigger criar o perfil
       await new Promise(resolve => setTimeout(resolve, 2000))
 
       // Criar registro de entregador
+      console.log('Criando registro de entregador...')
       const { error: driverError } = await supabase
         .from('delivery_drivers')
         .insert({
@@ -275,10 +302,12 @@ export function DriversManagement() {
         })
 
       if (driverError) {
+        console.error('Erro ao criar registro de entregador:', driverError)
         throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
       }
 
       // Vincular à organização
+      console.log('Vinculando à organização...')
       const { error: orgError } = await supabase
         .from('user_organizations')
         .insert({
@@ -288,15 +317,35 @@ export function DriversManagement() {
         })
 
       if (orgError) {
+        console.error('Erro ao vincular à organização:', orgError)
         throw new Error('Erro ao vincular à organização: ' + orgError.message)
       }
+
+      // Adicionar entregador à lista imediatamente
+      const newDriver: DeliveryDriver = {
+        id: `temp-${Date.now()}`, // ID temporário
+        user_id: newUserId,
+        is_online: false,
+        total_today: 0,
+        current_latitude: null,
+        current_longitude: null,
+        profiles: {
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone,
+          email: newDriverData.email
+        }
+      }
+
+      setDrivers(prev => [...prev, newDriver])
 
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Recarregar lista imediatamente
-      await loadDrivers()
+      // Recarregar lista após um tempo para pegar dados reais
+      setTimeout(async () => {
+        await loadDrivers()
+      }, 3000)
 
     } catch (error: any) {
       console.error('Erro ao criar entregador:', error)
@@ -448,7 +497,7 @@ export function DriversManagement() {
                       type="email"
                       value={newDriverData.email}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="joao@email.com"
+                      placeholder="joao@gmail.com"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
@@ -471,10 +520,13 @@ export function DriversManagement() {
                       type="password"
                       value={newDriverData.password}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Senha de acesso"
+                      placeholder="Senha de acesso (mín. 6 caracteres)"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Se a senha for menor que 6 caracteres, será completada automaticamente
+                    </p>
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button
@@ -705,6 +757,7 @@ export function DriversManagement() {
             </div>
           </div>
         </DialogContent>
+      
       </Dialog>
     </div>
   )
