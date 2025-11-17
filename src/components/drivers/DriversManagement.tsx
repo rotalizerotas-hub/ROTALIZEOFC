@@ -250,7 +250,8 @@ export function DriversManagement() {
             full_name: newDriverData.full_name,
             phone: newDriverData.phone,
             role: 'delivery_driver'
-          }
+          },
+          emailRedirectTo: undefined
         }
       })
 
@@ -261,7 +262,7 @@ export function DriversManagement() {
       const newUserId = authData.user.id
 
       // Aguardar um pouco para o trigger criar o perfil
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
       // Criar registro de entregador
       const { error: driverError } = await supabase
@@ -294,10 +295,8 @@ export function DriversManagement() {
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Recarregar lista
-      setTimeout(() => {
-        loadDrivers()
-      }, 1000)
+      // Recarregar lista imediatamente
+      await loadDrivers()
 
     } catch (error: any) {
       console.error('Erro ao criar entregador:', error)
