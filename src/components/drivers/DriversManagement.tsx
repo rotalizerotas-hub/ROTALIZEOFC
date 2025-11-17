@@ -107,70 +107,201 @@ export function DriversManagement() {
     }
   }
 
-  const ensureUserHasOrganization = async (): Promise<string> => {
-    if (!user) throw new Error('Usuário não autenticado')
-
-    // Verificar se usuário já tem organização
-    const { data: userOrgs } = await supabase
-      .from('user_organizations')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .limit(1)
-
-    if (userOrgs && userOrgs.length > 0) {
-      return userOrgs[0].organization_id
+  const createNewDriver = async () => {
+    if (!user) {
+      toast.error('Usuário não autenticado')
+      return
     }
 
-    // Se não tem organização, criar uma padrão
-    console.log('Usuário não possui organização, criando organização padrão...')
-
-    // Buscar um tipo de estabelecimento padrão
-    const { data: establishmentTypes } = await supabase
-      .from('establishment_types')
-      .select('id')
-      .limit(1)
-
-    const defaultEstablishmentTypeId = establishmentTypes?.[0]?.id
-
-    if (!defaultEstablishmentTypeId) {
-      throw new Error('Nenhum tipo de estabelecimento encontrado')
+    if (!newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
+      toast.error('Preencha todos os campos obrigatórios')
+      return
     }
 
-    // Criar organização padrão
-    const { data: newOrg, error: orgError } = await supabase
-      .from('organizations')
-      .insert({
-        name: 'Minha Empresa',
-        address: 'Endereço da empresa',
-        phone: '(31) 99999-9999',
-        establishment_type_id: defaultEstablishmentTypeId,
-        latitude: -18.5122,
-        longitude: -44.5550
-      })
-      .select()
-      .single()
+    setCreatingDriver(true)
 
-    if (orgError) {
-      console.error('Erro ao criar organização:', orgError)
-      throw new Error('Erro ao criar organização padrão')
-    }
-
-    // Vincular usuário à organização como admin
-    const { error: userOrgError } = await supabase
-      .from('user_organizations')
-      .insert({
-        user_id: user.id,
-        organization_id: newOrg.id,
-        role: 'admin'
+    try {
+      console.log('=== INICIANDO CRIAÇÃO DE ENTREGADOR ===')
+      console.log('Usuário atual:', user.id)
+      console.log('Dados do entregador:', { 
+        name: newDriverData.full_name, 
+        email: newDriverData.email,
+        phone: newDriverData.phone 
       })
 
-    if (userOrgError) {
-      console.error('Erro ao vincular usuário à organização:', userOrgError)
-      throw new Error('Erro ao vincular usuário à organização')
-    }
+      // PASSO 1: Verificar/Criar organização
+      console.log('PASSO 1: Verificando organização do usuário...')
+      
+      const { data: userOrgs, error: userOrgsError } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .limit(1)
 
-    toast.success('Organização padrão criada com sucesso!')
-    return newOrg.id
+      if (userOrgsError) {
+        console.error('Erro ao buscar organizações:', userOrgsError)
+        throw new Error('Erro ao verificar organizações do usuário')
+      }
+
+      let organizationId: string
+
+      if (!userOrgs || userOrgs.length === 0) {
+        console.log('Usuário não possui organização. Criando organização padrão...')
+        
+        // Buscar tipo de estabelecimento padrão
+        const { data: establishmentTypes, error: etError } = await supabase
+          .from('establishment_types')
+          .select('id')
+          .limit(1)
+
+        if (etError || !establishmentTypes || establishmentTypes.length === 0) {
+          console.error('Erro ao buscar tipos de estabelecimento:', etError)
+          throw new Error('Nenhum tipo de estabelecimento encontrado no sistema')
+        }
+
+        const defaultEstablishmentTypeId = establishmentTypes[0].id
+        console.log('Tipo de estabelecimento padrão:', defaultEstablishmentTypeId)
+
+        // Criar organização
+        const { data: newOrg, error: orgError } = await supabase
+          .from('organizations')
+          .insert({
+            name: 'Minha Empresa',
+            address: 'Endereço da empresa',
+            phone: '(31) 99999-9999',
+            establishment_type_id: defaultEstablishmentTypeId,
+            latitude: -18.5122,
+            longitude: -44.5550
+          })
+          .select()
+          .single()
+
+        if (orgError || !newOrg) {
+          console.error('Erro ao criar organização:', orgError)
+          throw new Error('Erro ao criar organização padrão')
+        }
+
+        organizationId = newOrg.id
+        console.log('Organização criada:', organizationId)
+
+        // Vincular usuário à organização
+        const { error: userOrgError } = await supabase
+          .from('user_organizations')
+          .insert({
+            user_id: user.id,
+            organization_id: organizationId,
+            role: 'admin'
+          })
+
+        if (userOrgError) {
+          console.error('Erro ao vincular usuário à organização:', userOrgError)
+          throw new Error('Erro ao vincular usuário à organização')
+        }
+
+        console.log('Usuário vinculado à organização como admin')
+        toast.success('Organização padrão criada!')
+      } else {
+        organizationId = userOrgs[0].organization_id
+        console.log('Organização existente encontrada:', organizationId)
+      }
+
+      // PASSO 2: Criar usuário no Auth
+      console.log('PASSO 2: Criando usuário no Supabase Auth...')
+      
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: newDriverData.email,
+        password: newDriverData.password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone,
+          role: 'delivery_driver'
+        }
+      })
+
+      if (authError || !authData.user) {
+        console.error('Erro ao criar usuário no Auth:', authError)
+        throw new Error(`Erro ao criar conta: ${authError?.message || 'Usuário não criado'}`)
+      }
+
+      const newUserId = authData.user.id
+      console.log('Usuário criado no Auth:', newUserId)
+
+      // PASSO 3: Criar perfil
+      console.log('PASSO 3: Criando perfil do usuário...')
+      
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: newUserId,
+          email: newDriverData.email,
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone
+        })
+
+      if (profileError) {
+        console.error('Erro ao criar perfil:', profileError)
+        // Tentar limpar o usuário criado
+        await supabase.auth.admin.deleteUser(newUserId)
+        throw new Error(`Erro ao criar perfil: ${profileError.message}`)
+      }
+
+      console.log('Perfil criado com sucesso')
+
+      // PASSO 4: Criar registro de entregador
+      console.log('PASSO 4: Criando registro de entregador...')
+      
+      const { error: driverError } = await supabase
+        .from('delivery_drivers')
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          is_online: false,
+          total_today: 0
+        })
+
+      if (driverError) {
+        console.error('Erro ao criar registro de entregador:', driverError)
+        // Tentar limpar dados criados
+        await supabase.auth.admin.deleteUser(newUserId)
+        throw new Error(`Erro ao criar registro de entregador: ${driverError.message}`)
+      }
+
+      console.log('Registro de entregador criado com sucesso')
+
+      // PASSO 5: Vincular à organização
+      console.log('PASSO 5: Vinculando entregador à organização...')
+      
+      const { error: orgLinkError } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          role: 'delivery_driver'
+        })
+
+      if (orgLinkError) {
+        console.error('Erro ao vincular entregador à organização:', orgLinkError)
+        // Tentar limpar dados criados
+        await supabase.auth.admin.deleteUser(newUserId)
+        throw new Error(`Erro ao vincular à organização: ${orgLinkError.message}`)
+      }
+
+      console.log('Entregador vinculado à organização com sucesso')
+      console.log('=== ENTREGADOR CRIADO COM SUCESSO ===')
+
+      toast.success('Entregador cadastrado com sucesso!')
+      setShowNewDriverDialog(false)
+      setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
+      loadDrivers()
+
+    } catch (error: any) {
+      console.error('=== ERRO NA CRIAÇÃO DO ENTREGADOR ===')
+      console.error('Erro completo:', error)
+      toast.error(error.message || 'Erro desconhecido ao criar entregador')
+    } finally {
+      setCreatingDriver(false)
+    }
   }
 
   const toggleDriverStatus = async (driverId: string, currentStatus: boolean) => {
@@ -195,100 +326,6 @@ export function DriversManagement() {
     } catch (error) {
       console.error('Erro ao alterar status do entregador:', error)
       toast.error('Erro ao alterar status do entregador')
-    }
-  }
-
-  const createNewDriver = async () => {
-    if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
-      toast.error('Preencha todos os campos obrigatórios')
-      return
-    }
-
-    setCreatingDriver(true)
-
-    try {
-      // Garantir que o usuário tem uma organização
-      const organizationId = await ensureUserHasOrganization()
-
-      console.log('Criando entregador para organização:', organizationId)
-
-      // Criar usuário no Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: newDriverData.email,
-        password: newDriverData.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone,
-          role: 'delivery_driver'
-        }
-      })
-
-      if (authError) {
-        console.error('Erro ao criar usuário no Auth:', authError)
-        throw new Error('Erro ao criar conta de usuário: ' + authError.message)
-      }
-
-      console.log('Usuário criado no Auth:', authData.user.id)
-
-      // Criar perfil do entregador
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: authData.user.id,
-          email: newDriverData.email,
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone
-        })
-
-      if (profileError) {
-        console.error('Erro ao criar perfil:', profileError)
-        throw new Error('Erro ao criar perfil do entregador: ' + profileError.message)
-      }
-
-      console.log('Perfil criado com sucesso')
-
-      // Criar registro de entregador
-      const { error: driverError } = await supabase
-        .from('delivery_drivers')
-        .insert({
-          user_id: authData.user.id,
-          organization_id: organizationId,
-          is_online: false
-        })
-
-      if (driverError) {
-        console.error('Erro ao criar registro de entregador:', driverError)
-        throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
-      }
-
-      console.log('Registro de entregador criado com sucesso')
-
-      // Criar vínculo com organização
-      const { error: orgError } = await supabase
-        .from('user_organizations')
-        .insert({
-          user_id: authData.user.id,
-          organization_id: organizationId,
-          role: 'delivery_driver'
-        })
-
-      if (orgError) {
-        console.error('Erro ao vincular com organização:', orgError)
-        throw new Error('Erro ao vincular entregador à organização: ' + orgError.message)
-      }
-
-      console.log('Vínculo com organização criado com sucesso')
-
-      toast.success('Entregador cadastrado com sucesso!')
-      setShowNewDriverDialog(false)
-      setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
-      loadDrivers()
-    } catch (error: any) {
-      console.error('Erro ao criar entregador:', error)
-      toast.error(error.message || 'Erro ao criar entregador')
-    } finally {
-      setCreatingDriver(false)
     }
   }
 
