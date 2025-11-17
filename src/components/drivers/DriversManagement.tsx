@@ -754,9 +754,10 @@ export function DriversManagement() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedDriverId(driver.i
+                          setSelectedDriverId(driver.id)
                           setShowPasswordDialog(true)
                         }}
+                
                         className="rounded-xl"
                         disabled={driver.id.startsWith('temp-')}
                       >
@@ -841,7 +842,6 @@ export function DriversManagement() {
             </div>
           </div>
         </DialogContent>
-      
       </Dialog>
     </div>
   )
