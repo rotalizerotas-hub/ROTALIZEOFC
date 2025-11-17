@@ -222,26 +222,26 @@ export function DriversManagement() {
 
     console.log('🏢 [ORG] Verificando organizações do usuário...')
 
-    // Verificar se usuário já tem organização
-    const { data: userOrgs, error: userOrgsError } = await supabase
-      .from('user_organizations')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .limit(1)
-
-    if (userOrgsError) {
-      console.error('❌ [ORG] Erro ao buscar organizações:', userOrgsError)
-      throw new Error('Erro ao verificar organizações do usuário')
-    }
-
-    if (userOrgs && userOrgs.length > 0) {
-      console.log('✅ [ORG] Organização encontrada:', userOrgs[0].organization_id)
-      return userOrgs[0].organization_id
-    }
-
-    console.log('🔄 [ORG] Criando organização padrão...')
-
     try {
+      // Verificar se usuário já tem organização
+      const { data: userOrgs, error: userOrgsError } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .limit(1)
+
+      if (userOrgsError) {
+        console.error('❌ [ORG] Erro ao buscar organizações:', userOrgsError)
+        throw new Error('Erro ao verificar organizações do usuário')
+      }
+
+      if (userOrgs && userOrgs.length > 0) {
+        console.log('✅ [ORG] Organização encontrada:', userOrgs[0].organization_id)
+        return userOrgs[0].organization_id
+      }
+
+      console.log('🔄 [ORG] Criando organização padrão...')
+
       // Buscar um tipo de estabelecimento padrão
       const { data: establishmentTypes, error: etError } = await supabase
         .from('establishment_types')
@@ -317,8 +317,23 @@ export function DriversManagement() {
 
   const createNewDriver = async () => {
     // Validações básicas
-    if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
-      toast.error('Preencha todos os campos obrigatórios')
+    if (!user) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
+    if (!newDriverData.full_name.trim()) {
+      toast.error('Nome completo é obrigatório')
+      return
+    }
+
+    if (!newDriverData.email.trim()) {
+      toast.error('E-mail é obrigatório')
+      return
+    }
+
+    if (!newDriverData.password) {
+      toast.error('Senha é obrigatória')
       return
     }
 
@@ -332,49 +347,79 @@ export function DriversManagement() {
     const loadingToast = toast.loading('Criando entregador...')
 
     try {
-      console.log('🔄 [CREATE] Iniciando criação de entregador...')
-      console.log('📝 [CREATE] Dados:', {
+      console.log('🔄 [CREATE] === INICIANDO CRIAÇÃO DE ENTREGADOR ===')
+      console.log('📝 [CREATE] Dados recebidos:', {
         name: newDriverData.full_name,
         email: newDriverData.email,
-        phone: newDriverData.phone
+        phone: newDriverData.phone,
+        passwordLength: newDriverData.password.length
       })
 
-      // Garantir que o usuário tem uma organização
+      // PASSO 1: Garantir organização
+      console.log('🏢 [CREATE] PASSO 1: Garantindo organização...')
       const organizationId = await ensureUserHasOrganization()
-      console.log('🏢 [CREATE] Organização ID:', organizationId)
+      console.log('✅ [CREATE] Organização garantida:', organizationId)
 
-      // PASSO 1: Criar usuário no Auth
-      console.log('🚀 [CREATE] PASSO 1: Criando usuário no Auth...')
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // PASSO 2: Criar usuário no Auth
+      console.log('🚀 [CREATE] PASSO 2: Criando usuário no Supabase Auth...')
+      
+      const authPayload = {
         email: newDriverData.email.trim(),
         password: newDriverData.password,
         options: {
           data: {
-            full_name: newDriverData.full_name,
-            phone: newDriverData.phone,
+            full_name: newDriverData.full_name.trim(),
+            phone: newDriverData.phone.trim() || '',
             role: 'delivery_driver'
           },
           emailRedirectTo: undefined
         }
-      })
-
-      if (authError) {
-        console.error('❌ [CREATE] Erro do Supabase Auth:', authError)
-        throw new Error(authError.message || 'Erro ao criar usuário')
       }
 
-      if (!authData.user) {
-        throw new Error('Usuário não foi criado')
+      console.log('📤 [CREATE] Payload para Auth:', {
+        email: authPayload.email,
+        passwordLength: authPayload.password.length,
+        metadata: authPayload.options.data
+      })
+
+      const { data: authData, error: authError } = await supabase.auth.signUp(authPayload)
+
+      if (authError) {
+        console.error('❌ [CREATE] Erro detalhado do Supabase Auth:', {
+          message: authError.message,
+          status: authError.status,
+          name: authError.name
+        })
+        
+        // Tratar erros específicos
+        if (authError.message.includes('Email address')) {
+          throw new Error('Formato de email inválido. Tente um email diferente.')
+        }
+        if (authError.message.includes('Password')) {
+          throw new Error('Senha muito fraca. Tente uma senha mais forte.')
+        }
+        if (authError.message.includes('User already registered')) {
+          throw new Error('Este email já está cadastrado. Use outro email.')
+        }
+        
+        throw new Error(`Erro ao criar usuário: ${authError.message}`)
+      }
+
+      if (!authData || !authData.user) {
+        console.error('❌ [CREATE] Resposta inválida do Auth:', authData)
+        throw new Error('Falha na criação do usuário - resposta inválida')
       }
 
       const newUserId = authData.user.id
-      console.log('✅ [CREATE] Usuário criado com ID:', newUserId)
+      console.log('✅ [CREATE] Usuário criado com sucesso! ID:', newUserId)
 
-      // PASSO 2: Aguardar e verificar perfil
-      console.log('⏳ [CREATE] PASSO 2: Aguardando criação do perfil...')
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // PASSO 3: Criar perfil
+      console.log('👤 [CREATE] PASSO 3: Criando perfil do usuário...')
+      
+      // Aguardar um pouco para o trigger
+      await new Promise(resolve => setTimeout(resolve, 1500))
 
-      // Verificar se perfil existe
+      // Verificar se perfil já existe
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id, full_name, email, phone')
@@ -382,64 +427,81 @@ export function DriversManagement() {
         .single()
 
       if (!existingProfile) {
-        console.log('🔄 [CREATE] Criando perfil manualmente...')
+        console.log('🔄 [CREATE] Perfil não existe, criando manualmente...')
+        
+        const profilePayload = {
+          id: newUserId,
+          email: newDriverData.email.trim(),
+          full_name: newDriverData.full_name.trim(),
+          phone: newDriverData.phone.trim() || ''
+        }
+
+        console.log('📤 [CREATE] Payload para perfil:', profilePayload)
+
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert({
-            id: newUserId,
-            email: newDriverData.email,
-            full_name: newDriverData.full_name,
-            phone: newDriverData.phone || ''
-          })
+          .insert(profilePayload)
 
         if (profileError) {
           console.error('❌ [CREATE] Erro ao criar perfil:', profileError)
-          throw new Error('Erro ao criar perfil: ' + profileError.message)
+          throw new Error(`Erro ao criar perfil: ${profileError.message}`)
         }
+        
         console.log('✅ [CREATE] Perfil criado manualmente')
       } else {
-        console.log('✅ [CREATE] Perfil já existe:', existingProfile)
+        console.log('✅ [CREATE] Perfil já existe (criado pelo trigger):', existingProfile)
       }
 
-      // PASSO 3: Criar registro de entregador
-      console.log('🔄 [CREATE] PASSO 3: Criando registro de entregador...')
+      // PASSO 4: Criar registro de entregador
+      console.log('🚚 [CREATE] PASSO 4: Criando registro de entregador...')
+      
+      const driverPayload = {
+        user_id: newUserId,
+        organization_id: organizationId,
+        is_online: false,
+        total_today: 0
+      }
+
+      console.log('📤 [CREATE] Payload para entregador:', driverPayload)
+
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          is_online: false,
-          total_today: 0
-        })
+        .insert(driverPayload)
         .select()
         .single()
 
       if (driverError) {
         console.error('❌ [CREATE] Erro ao criar registro de entregador:', driverError)
-        throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
+        throw new Error(`Erro ao criar registro de entregador: ${driverError.message}`)
       }
 
       console.log('✅ [CREATE] Registro de entregador criado:', driverData)
 
-      // PASSO 4: Vincular à organização
-      console.log('🔄 [CREATE] PASSO 4: Vinculando à organização...')
+      // PASSO 5: Vincular à organização
+      console.log('🔗 [CREATE] PASSO 5: Vinculando à organização...')
+      
+      const orgLinkPayload = {
+        user_id: newUserId,
+        organization_id: organizationId,
+        role: 'delivery_driver' as const
+      }
+
+      console.log('📤 [CREATE] Payload para organização:', orgLinkPayload)
+
       const { error: orgError } = await supabase
         .from('user_organizations')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          role: 'delivery_driver'
-        })
+        .insert(orgLinkPayload)
 
       if (orgError) {
         console.error('❌ [CREATE] Erro ao vincular à organização:', orgError)
-        throw new Error('Erro ao vincular à organização: ' + orgError.message)
+        throw new Error(`Erro ao vincular à organização: ${orgError.message}`)
       }
 
       console.log('✅ [CREATE] Entregador vinculado à organização')
 
-      // PASSO 5: Adicionar à lista local imediatamente
-      console.log('🔄 [CREATE] PASSO 5: Adicionando à lista local...')
+      // PASSO 6: Adicionar à lista local
+      console.log('📋 [CREATE] PASSO 6: Adicionando à lista local...')
+      
       const newDriver: DeliveryDriver = {
         id: driverData.id,
         user_id: newUserId,
@@ -448,35 +510,49 @@ export function DriversManagement() {
         current_latitude: null,
         current_longitude: null,
         profiles: {
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone || '(31) 99999-0000',
-          email: newDriverData.email
+          full_name: newDriverData.full_name.trim(),
+          phone: newDriverData.phone.trim() || '(31) 99999-0000',
+          email: newDriverData.email.trim()
         }
       }
 
       setDrivers(prev => [newDriver, ...prev])
       console.log('✅ [CREATE] Entregador adicionado à lista local')
 
-      // PASSO 6: Recarregar lista do servidor
-      console.log('🔄 [CREATE] PASSO 6: Recarregando lista do servidor...')
+      // PASSO 7: Recarregar do servidor
+      console.log('🔄 [CREATE] PASSO 7: Agendando recarregamento do servidor...')
       setTimeout(async () => {
-        await loadDrivers()
-        console.log('✅ [CREATE] Lista recarregada do servidor')
-      }, 1000)
+        try {
+          await loadDrivers()
+          console.log('✅ [CREATE] Lista recarregada do servidor')
+        } catch (error) {
+          console.error('⚠️ [CREATE] Erro ao recarregar lista:', error)
+        }
+      }, 2000)
 
+      // Finalizar
       toast.dismiss(loadingToast)
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
 
-      console.log('🎉 [CREATE] Processo concluído com sucesso!')
+      console.log('🎉 [CREATE] === PROCESSO CONCLUÍDO COM SUCESSO ===')
 
     } catch (error: any) {
-      console.error('❌ [CREATE] Erro ao criar entregador:', error)
+      console.error('❌ [CREATE] === ERRO NO PROCESSO ===')
+      console.error('❌ [CREATE] Erro completo:', error)
+      
       toast.dismiss(loadingToast)
-      toast.error(error.message || 'Erro ao criar entregador')
+      
+      // Mensagem de erro mais amigável
+      const errorMessage = error.message || 'Erro desconhecido ao criar entregador'
+      toast.error(errorMessage)
+      
+      console.error('❌ [CREATE] Mensagem exibida ao usuário:', errorMessage)
+      
     } finally {
       setCreatingDriver(false)
+      console.log('🔄 [CREATE] Estado de criação resetado')
     }
   }
 
@@ -680,12 +756,12 @@ export function DriversManagement() {
                       type="email"
                       value={newDriverData.email}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="Qualquer formato de email"
+                      placeholder="joao@exemplo.com"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Aceita qualquer formato de email
+                      Use um email válido
                     </p>
                   </div>
                   <div>
@@ -706,12 +782,12 @@ export function DriversManagement() {
                       type="password"
                       value={newDriverData.password}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Qualquer senha (sem espaços)"
+                      placeholder="Mínimo 6 caracteres (sem espaços)"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Aceita qualquer tamanho, apenas sem espaços
+                      Mínimo 6 caracteres, sem espaços
                     </p>
                   </div>
                   <div className="flex gap-2 pt-4">
