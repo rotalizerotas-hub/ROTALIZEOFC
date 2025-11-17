@@ -228,8 +228,8 @@ export function DriversManagement() {
           phone: newDriverData.phone.trim() || ''
         })
 
-      if (profileError) {
-        console.error('⚠️ [CREATE] Erro perfil:', profileError)
+      if (profileError && profileError.message) {
+        console.error('⚠️ [CREATE] Erro perfil:', profileError.message)
         // Continuar mesmo com erro de perfil
       } else {
         console.log('✅ [CREATE] Perfil criado')
