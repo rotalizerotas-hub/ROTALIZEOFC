@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Users, Plus, MapPin, Edit, Trash2, Key } from 'lucide-react'
+import { ArrowLeft, Users, Plus, MapPin, Trash2, Key } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -50,122 +50,85 @@ export function DriversManagement() {
   const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
-    loadDrivers()
+    if (user) {
+      loadDrivers()
+    }
   }, [user])
 
   const loadDrivers = async () => {
     if (!user) return
 
     try {
-      console.log('🚚 [LOAD] Carregando entregadores...')
+      console.log('🔄 [LOAD] Carregando entregadores para usuário:', user.id)
 
-      // Buscar organizações do usuário primeiro
+      // Buscar organizações do usuário
       const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
-        .select('organization_id, role')
+        .select('organization_id')
         .eq('user_id', user.id)
 
       if (userOrgsError) {
         console.error('❌ [LOAD] Erro ao buscar organizações:', userOrgsError)
-      }
-
-      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
-      console.log('🏢 [LOAD] Organizações do usuário:', orgIds)
-
-      // Buscar entregadores das organizações do usuário
-      let driversData = []
-      
-      if (orgIds.length > 0) {
-        console.log('🔍 [LOAD] Buscando entregadores das organizações...')
-        const { data: orgDriversData, error: orgDriversError } = await supabase
-          .from('delivery_drivers')
-          .select(`
-            id,
-            user_id,
-            is_online,
-            total_today,
-            current_latitude,
-            current_longitude,
-            organization_id
-          `)
-          .in('organization_id', orgIds)
-          .order('created_at', { ascending: false })
-
-        if (orgDriversError) {
-          console.error('❌ [LOAD] Erro ao buscar entregadores:', orgDriversError)
-        } else {
-          driversData = orgDriversData || []
-          console.log('📊 [LOAD] Entregadores encontrados:', driversData.length)
-        }
-      }
-
-      // Se não encontrou entregadores reais, usar dados de exemplo
-      if (!driversData || driversData.length === 0) {
-        console.log('📭 [LOAD] Nenhum entregador real encontrado, usando dados de exemplo...')
-        
-        const exampleDrivers: DeliveryDriver[] = [
-          {
-            id: 'example-1',
-            user_id: 'example-user-1',
-            is_online: true,
-            total_today: 150.50,
-            current_latitude: -19.9167,
-            current_longitude: -43.9345,
-            profiles: {
-              full_name: 'João Silva - Exemplo',
-              phone: '(31) 99999-1111',
-              email: 'joao@exemplo.com'
-            }
-          },
-          {
-            id: 'example-2',
-            user_id: 'example-user-2',
-            is_online: false,
-            total_today: 89.30,
-            current_latitude: null,
-            current_longitude: null,
-            profiles: {
-              full_name: 'Maria Santos - Exemplo',
-              phone: '(31) 99999-2222',
-              email: 'maria@exemplo.com'
-            }
-          }
-        ]
-        
-        setDrivers(exampleDrivers)
-        setLoading(false)
-        console.log('✅ [LOAD] Dados de exemplo carregados')
-        return
-      }
-
-      // Buscar perfis dos entregadores reais
-      console.log('👤 [LOAD] Buscando perfis dos entregadores...')
-      const userIds = driversData.map(driver => driver.user_id).filter(Boolean)
-      
-      if (userIds.length === 0) {
-        console.log('⚠️ [LOAD] Nenhum user_id válido encontrado')
         setDrivers([])
         setLoading(false)
         return
       }
 
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+      console.log('🏢 [LOAD] Organizações encontradas:', orgIds)
+
+      if (orgIds.length === 0) {
+        console.log('📭 [LOAD] Usuário sem organizações')
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
+      // Buscar entregadores das organizações
+      const { data: driversData, error: driversError } = await supabase
+        .from('delivery_drivers')
         .select(`
           id,
-          full_name,
-          phone,
-          email
+          user_id,
+          is_online,
+          total_today,
+          current_latitude,
+          current_longitude,
+          created_at
         `)
+        .in('organization_id', orgIds)
+        .order('created_at', { ascending: false })
+
+      if (driversError) {
+        console.error('❌ [LOAD] Erro ao buscar entregadores:', driversError)
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
+      console.log('🚚 [LOAD] Entregadores encontrados:', driversData?.length || 0)
+
+      if (!driversData || driversData.length === 0) {
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
+      // Buscar perfis dos entregadores
+      const userIds = driversData.map(d => d.user_id).filter(Boolean)
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, email')
         .in('id', userIds)
 
       if (profilesError) {
-        console.error('⚠️ [LOAD] Erro ao buscar perfis:', profilesError)
+        console.error('❌ [LOAD] Erro ao buscar perfis:', profilesError)
       }
 
       console.log('👤 [LOAD] Perfis encontrados:', profilesData?.length || 0)
 
-      // Combinar dados de entregadores com perfis
+      // Combinar dados
       const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
@@ -176,14 +139,10 @@ export function DriversManagement() {
           total_today: Number(driver.total_today) || 0,
           current_latitude: driver.current_latitude,
           current_longitude: driver.current_longitude,
-          profiles: profile ? {
-            full_name: profile.full_name || `Entregador ${driver.id.slice(-4)}`,
-            phone: profile.phone || '(31) 99999-0000',
-            email: profile.email || 'entregador@exemplo.com'
-          } : {
-            full_name: `Entregador ${driver.id.slice(-4)}`,
-            phone: '(31) 99999-0000',
-            email: 'entregador@exemplo.com'
+          profiles: {
+            full_name: profile?.full_name || 'Nome não encontrado',
+            phone: profile?.phone || 'Telefone não informado',
+            email: profile?.email || 'Email não encontrado'
           }
         }
       })
@@ -192,143 +151,22 @@ export function DriversManagement() {
       setDrivers(processedDrivers)
 
     } catch (error) {
-      console.error('❌ [LOAD] Erro ao carregar entregadores:', error)
-      toast.error('Erro ao carregar entregadores')
-      
-      // Fallback para dados de exemplo
-      const fallbackDrivers: DeliveryDriver[] = [
-        {
-          id: 'fallback-1',
-          user_id: 'fallback-user-1',
-          is_online: true,
-          total_today: 125.00,
-          current_latitude: -19.9167,
-          current_longitude: -43.9345,
-          profiles: {
-            full_name: 'Entregador Ativo - Fallback',
-            phone: '(31) 99999-0001',
-            email: 'ativo@exemplo.com'
-          }
-        }
-      ]
-      setDrivers(fallbackDrivers)
+      console.error('❌ [LOAD] Erro geral:', error)
+      setDrivers([])
     } finally {
       setLoading(false)
     }
   }
 
-  const ensureUserHasOrganization = async (): Promise<string> => {
-    if (!user) throw new Error('Usuário não autenticado')
-
-    console.log('🏢 [ORG] Verificando organizações do usuário...')
-
-    try {
-      // Verificar se usuário já tem organização
-      const { data: userOrgs, error: userOrgsError } = await supabase
-        .from('user_organizations')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .limit(1)
-
-      if (userOrgsError) {
-        console.error('❌ [ORG] Erro ao buscar organizações:', userOrgsError)
-        throw new Error('Erro ao verificar organizações do usuário')
-      }
-
-      if (userOrgs && userOrgs.length > 0) {
-        console.log('✅ [ORG] Organização encontrada:', userOrgs[0].organization_id)
-        return userOrgs[0].organization_id
-      }
-
-      console.log('🔄 [ORG] Criando organização padrão...')
-
-      // Buscar um tipo de estabelecimento padrão
-      const { data: establishmentTypes, error: etError } = await supabase
-        .from('establishment_types')
-        .select('id, name')
-        .limit(1)
-
-      let establishmentTypeId = establishmentTypes?.[0]?.id
-
-      if (!establishmentTypeId) {
-        console.log('🔄 [ORG] Criando tipo de estabelecimento padrão...')
-        
-        const { data: newType, error: newTypeError } = await supabase
-          .from('establishment_types')
-          .insert({
-            name: 'Estabelecimento Geral',
-            icon_url: '/icons/default.png',
-            emoji: '🏪'
-          })
-          .select()
-          .single()
-
-        if (newTypeError) {
-          console.error('❌ [ORG] Erro ao criar tipo de estabelecimento:', newTypeError)
-          throw new Error(`Erro ao criar tipo de estabelecimento: ${newTypeError.message}`)
-        }
-
-        establishmentTypeId = newType.id
-      }
-
-      // Criar organização padrão
-      const { data: newOrg, error: orgError } = await supabase
-        .from('organizations')
-        .insert({
-          name: 'Minha Empresa',
-          address: 'Endereço da empresa',
-          phone: '(31) 99999-9999',
-          establishment_type_id: establishmentTypeId,
-          latitude: -18.5122,
-          longitude: -44.5550
-        })
-        .select()
-        .single()
-
-      if (orgError) {
-        console.error('❌ [ORG] Erro ao criar organização:', orgError)
-        throw new Error(`Erro ao criar organização: ${orgError.message}`)
-      }
-
-      // Vincular usuário à organização como admin
-      const { error: userOrgError } = await supabase
-        .from('user_organizations')
-        .insert({
-          user_id: user.id,
-          organization_id: newOrg.id,
-          role: 'admin'
-        })
-
-      if (userOrgError) {
-        console.error('❌ [ORG] Erro ao vincular usuário:', userOrgError)
-        await supabase.from('organizations').delete().eq('id', newOrg.id)
-        throw new Error(`Erro ao vincular usuário à organização: ${userOrgError.message}`)
-      }
-
-      console.log('✅ [ORG] Organização criada:', newOrg.id)
-      toast.success('Organização padrão criada com sucesso!')
-      return newOrg.id
-
-    } catch (error: any) {
-      console.error('❌ [ORG] Erro no processo:', error)
-      throw new Error(error.message || 'Erro ao criar organização padrão')
-    }
-  }
-
   const createNewDriver = async () => {
-    // Validações básicas
-    if (!user) {
-      toast.error('Usuário não autenticado')
-      return
-    }
-
+    // Validações
     if (!newDriverData.full_name.trim()) {
-      toast.error('Nome completo é obrigatório')
+      toast.error('Nome é obrigatório')
       return
     }
 
     if (!newDriverData.email.trim()) {
-      toast.error('E-mail é obrigatório')
+      toast.error('Email é obrigatório')
       return
     }
 
@@ -337,9 +175,8 @@ export function DriversManagement() {
       return
     }
 
-    // Validar apenas espaços na senha
     if (newDriverData.password.includes(' ')) {
-      toast.error('A senha não pode conter espaços')
+      toast.error('Senha não pode conter espaços')
       return
     }
 
@@ -347,161 +184,95 @@ export function DriversManagement() {
     const loadingToast = toast.loading('Criando entregador...')
 
     try {
-      console.log('🔄 [CREATE] === INICIANDO CRIAÇÃO DE ENTREGADOR ===')
-      console.log('📝 [CREATE] Dados recebidos:', {
-        name: newDriverData.full_name,
-        email: newDriverData.email,
-        phone: newDriverData.phone,
-        passwordLength: newDriverData.password.length
-      })
-
-      // PASSO 1: Garantir organização
-      console.log('🏢 [CREATE] PASSO 1: Garantindo organização...')
-      const organizationId = await ensureUserHasOrganization()
-      console.log('✅ [CREATE] Organização garantida:', organizationId)
-
-      // PASSO 2: Criar usuário no Auth
-      console.log('🚀 [CREATE] PASSO 2: Criando usuário no Supabase Auth...')
+      console.log('🚀 [CREATE] Iniciando criação...')
       
-      const authPayload = {
+      // PASSO 1: Garantir organização
+      let organizationId = await ensureOrganization()
+      console.log('🏢 [CREATE] Organização ID:', organizationId)
+
+      // PASSO 2: Criar usuário
+      console.log('👤 [CREATE] Criando usuário...')
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newDriverData.email.trim(),
         password: newDriverData.password,
         options: {
           data: {
             full_name: newDriverData.full_name.trim(),
-            phone: newDriverData.phone.trim() || '',
-            role: 'delivery_driver'
-          },
-          emailRedirectTo: undefined
+            phone: newDriverData.phone.trim()
+          }
         }
-      }
-
-      console.log('📤 [CREATE] Payload para Auth:', {
-        email: authPayload.email,
-        passwordLength: authPayload.password.length,
-        metadata: authPayload.options.data
       })
 
-      const { data: authData, error: authError } = await supabase.auth.signUp(authPayload)
-
       if (authError) {
-        console.error('❌ [CREATE] Erro detalhado do Supabase Auth:', {
-          message: authError.message,
-          status: authError.status,
-          name: authError.name
-        })
-        
-        // Tratar erros específicos
-        if (authError.message.includes('Email address')) {
-          throw new Error('Formato de email inválido. Tente um email diferente.')
-        }
-        if (authError.message.includes('Password')) {
-          throw new Error('Senha muito fraca. Tente uma senha mais forte.')
-        }
-        if (authError.message.includes('User already registered')) {
-          throw new Error('Este email já está cadastrado. Use outro email.')
-        }
-        
+        console.error('❌ [CREATE] Erro Auth:', authError)
         throw new Error(`Erro ao criar usuário: ${authError.message}`)
       }
 
-      if (!authData || !authData.user) {
-        console.error('❌ [CREATE] Resposta inválida do Auth:', authData)
-        throw new Error('Falha na criação do usuário - resposta inválida')
+      if (!authData.user) {
+        throw new Error('Usuário não foi criado')
       }
 
       const newUserId = authData.user.id
-      console.log('✅ [CREATE] Usuário criado com sucesso! ID:', newUserId)
+      console.log('✅ [CREATE] Usuário criado:', newUserId)
 
-      // PASSO 3: Criar perfil
-      console.log('👤 [CREATE] PASSO 3: Criando perfil do usuário...')
-      
-      // Aguardar um pouco para o trigger
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // PASSO 3: Aguardar e criar perfil
+      console.log('📝 [CREATE] Aguardando e criando perfil...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Verificar se perfil já existe
-      const { data: existingProfile } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, phone')
-        .eq('id', newUserId)
-        .single()
-
-      if (!existingProfile) {
-        console.log('🔄 [CREATE] Perfil não existe, criando manualmente...')
-        
-        const profilePayload = {
+        .upsert({
           id: newUserId,
           email: newDriverData.email.trim(),
           full_name: newDriverData.full_name.trim(),
           phone: newDriverData.phone.trim() || ''
-        }
+        })
 
-        console.log('📤 [CREATE] Payload para perfil:', profilePayload)
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert(profilePayload)
-
-        if (profileError) {
-          console.error('❌ [CREATE] Erro ao criar perfil:', profileError)
-          throw new Error(`Erro ao criar perfil: ${profileError.message}`)
-        }
-        
-        console.log('✅ [CREATE] Perfil criado manualmente')
+      if (profileError) {
+        console.error('⚠️ [CREATE] Erro perfil:', profileError)
+        // Continuar mesmo com erro de perfil
       } else {
-        console.log('✅ [CREATE] Perfil já existe (criado pelo trigger):', existingProfile)
+        console.log('✅ [CREATE] Perfil criado')
       }
 
-      // PASSO 4: Criar registro de entregador
-      console.log('🚚 [CREATE] PASSO 4: Criando registro de entregador...')
-      
-      const driverPayload = {
-        user_id: newUserId,
-        organization_id: organizationId,
-        is_online: false,
-        total_today: 0
-      }
-
-      console.log('📤 [CREATE] Payload para entregador:', driverPayload)
-
+      // PASSO 4: Criar entregador
+      console.log('🚚 [CREATE] Criando entregador...')
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
-        .insert(driverPayload)
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          is_online: false,
+          total_today: 0
+        })
         .select()
         .single()
 
       if (driverError) {
-        console.error('❌ [CREATE] Erro ao criar registro de entregador:', driverError)
-        throw new Error(`Erro ao criar registro de entregador: ${driverError.message}`)
+        console.error('❌ [CREATE] Erro entregador:', driverError)
+        throw new Error(`Erro ao criar entregador: ${driverError.message}`)
       }
 
-      console.log('✅ [CREATE] Registro de entregador criado:', driverData)
+      console.log('✅ [CREATE] Entregador criado:', driverData.id)
 
       // PASSO 5: Vincular à organização
-      console.log('🔗 [CREATE] PASSO 5: Vinculando à organização...')
-      
-      const orgLinkPayload = {
-        user_id: newUserId,
-        organization_id: organizationId,
-        role: 'delivery_driver' as const
-      }
-
-      console.log('📤 [CREATE] Payload para organização:', orgLinkPayload)
-
+      console.log('🔗 [CREATE] Vinculando à organização...')
       const { error: orgError } = await supabase
         .from('user_organizations')
-        .insert(orgLinkPayload)
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          role: 'delivery_driver'
+        })
 
       if (orgError) {
-        console.error('❌ [CREATE] Erro ao vincular à organização:', orgError)
-        throw new Error(`Erro ao vincular à organização: ${orgError.message}`)
+        console.error('❌ [CREATE] Erro organização:', orgError)
+        throw new Error(`Erro ao vincular: ${orgError.message}`)
       }
 
-      console.log('✅ [CREATE] Entregador vinculado à organização')
+      console.log('✅ [CREATE] Vinculado à organização')
 
       // PASSO 6: Adicionar à lista local
-      console.log('📋 [CREATE] PASSO 6: Adicionando à lista local...')
-      
       const newDriver: DeliveryDriver = {
         id: driverData.id,
         user_id: newUserId,
@@ -511,77 +282,114 @@ export function DriversManagement() {
         current_longitude: null,
         profiles: {
           full_name: newDriverData.full_name.trim(),
-          phone: newDriverData.phone.trim() || '(31) 99999-0000',
+          phone: newDriverData.phone.trim() || 'Não informado',
           email: newDriverData.email.trim()
         }
       }
 
       setDrivers(prev => [newDriver, ...prev])
-      console.log('✅ [CREATE] Entregador adicionado à lista local')
+      console.log('✅ [CREATE] Adicionado à lista local')
 
       // PASSO 7: Recarregar do servidor
-      console.log('🔄 [CREATE] PASSO 7: Agendando recarregamento do servidor...')
       setTimeout(async () => {
-        try {
-          await loadDrivers()
-          console.log('✅ [CREATE] Lista recarregada do servidor')
-        } catch (error) {
-          console.error('⚠️ [CREATE] Erro ao recarregar lista:', error)
-        }
-      }, 2000)
+        await loadDrivers()
+        console.log('✅ [CREATE] Lista recarregada')
+      }, 1000)
 
-      // Finalizar
       toast.dismiss(loadingToast)
-      toast.success('Entregador cadastrado com sucesso!')
+      toast.success('Entregador criado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
 
-      console.log('🎉 [CREATE] === PROCESSO CONCLUÍDO COM SUCESSO ===')
+      console.log('🎉 [CREATE] Processo concluído!')
 
     } catch (error: any) {
-      console.error('❌ [CREATE] === ERRO NO PROCESSO ===')
-      console.error('❌ [CREATE] Erro completo:', error)
-      
+      console.error('❌ [CREATE] Erro:', error)
       toast.dismiss(loadingToast)
-      
-      // Mensagem de erro mais amigável
-      const errorMessage = error.message || 'Erro desconhecido ao criar entregador'
-      toast.error(errorMessage)
-      
-      console.error('❌ [CREATE] Mensagem exibida ao usuário:', errorMessage)
-      
+      toast.error(error.message || 'Erro ao criar entregador')
     } finally {
       setCreatingDriver(false)
-      console.log('🔄 [CREATE] Estado de criação resetado')
     }
+  }
+
+  const ensureOrganization = async (): Promise<string> => {
+    if (!user) throw new Error('Usuário não autenticado')
+
+    // Verificar se já tem organização
+    const { data: userOrgs } = await supabase
+      .from('user_organizations')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .limit(1)
+
+    if (userOrgs && userOrgs.length > 0) {
+      return userOrgs[0].organization_id
+    }
+
+    // Criar organização
+    console.log('🏢 [ORG] Criando organização...')
+
+    // Buscar tipo de estabelecimento
+    let { data: establishmentTypes } = await supabase
+      .from('establishment_types')
+      .select('id')
+      .limit(1)
+
+    let establishmentTypeId = establishmentTypes?.[0]?.id
+
+    if (!establishmentTypeId) {
+      const { data: newType } = await supabase
+        .from('establishment_types')
+        .insert({
+          name: 'Restaurante',
+          icon_url: '/icons/restaurant.png',
+          emoji: '🍽️'
+        })
+        .select()
+        .single()
+
+      establishmentTypeId = newType?.id
+    }
+
+    // Criar organização
+    const { data: newOrg, error: orgError } = await supabase
+      .from('organizations')
+      .insert({
+        name: 'Minha Empresa',
+        address: 'Endereço da empresa',
+        phone: '(31) 99999-9999',
+        establishment_type_id: establishmentTypeId,
+        latitude: -18.5122,
+        longitude: -44.5550
+      })
+      .select()
+      .single()
+
+    if (orgError) {
+      throw new Error(`Erro ao criar organização: ${orgError.message}`)
+    }
+
+    // Vincular usuário
+    await supabase
+      .from('user_organizations')
+      .insert({
+        user_id: user.id,
+        organization_id: newOrg.id,
+        role: 'admin'
+      })
+
+    console.log('✅ [ORG] Organização criada:', newOrg.id)
+    return newOrg.id
   }
 
   const toggleDriverStatus = async (driverId: string, currentStatus: boolean) => {
     try {
-      // Verificar se é um ID de exemplo
-      if (driverId.startsWith('example-') || driverId.startsWith('fallback-')) {
-        // Apenas atualizar localmente para IDs de exemplo
-        setDrivers(prev => prev.map(driver => 
-          driver.id === driverId 
-            ? { ...driver, is_online: !currentStatus }
-            : driver
-        ))
-        toast.success(`Entregador ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`)
-        return
-      }
-
       const { error } = await supabase
         .from('delivery_drivers')
-        .update({ 
-          is_online: !currentStatus,
-          updated_at: new Date().toISOString()
-        })
+        .update({ is_online: !currentStatus })
         .eq('id', driverId)
 
-      if (error) {
-        console.error('❌ [TOGGLE] Erro ao alterar status:', error)
-        throw error
-      }
+      if (error) throw error
 
       setDrivers(prev => prev.map(driver => 
         driver.id === driverId 
@@ -589,98 +397,38 @@ export function DriversManagement() {
           : driver
       ))
 
-      toast.success(`Entregador ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`)
+      toast.success(`Entregador ${!currentStatus ? 'ativado' : 'desativado'}`)
     } catch (error) {
-      console.error('❌ [TOGGLE] Erro ao alterar status do entregador:', error)
-      toast.error('Erro ao alterar status do entregador')
+      console.error('Erro ao alterar status:', error)
+      toast.error('Erro ao alterar status')
     }
   }
 
   const deleteDriver = async (driverId: string, userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este entregador? Esta ação não pode ser desfeita.')) return
-
-    // Verificar se é um ID de exemplo
-    if (driverId.startsWith('example-') || driverId.startsWith('fallback-')) {
-      setDrivers(prev => prev.filter(driver => driver.id !== driverId))
-      toast.success('Entregador de exemplo removido!')
-      return
-    }
-
-    const loadingToast = toast.loading('Excluindo entregador...')
+    if (!confirm('Excluir este entregador?')) return
 
     try {
-      console.log(`🗑️ [DELETE] Iniciando exclusão: ${driverId}`)
-
-      // Primeiro, remover da lista local para feedback imediato
+      // Remover da lista local primeiro
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
 
-      // Verificar se usuário tem permissão (é admin)
-      const { data: userRole, error: roleError } = await supabase
-        .from('user_organizations')
-        .select('role, organization_id')
-        .eq('user_id', user?.id)
-        .single()
+      // Deletar do banco
+      await supabase.from('delivery_drivers').delete().eq('id', driverId)
+      await supabase.from('user_organizations').delete().eq('user_id', userId).eq('role', 'delivery_driver')
 
-      if (roleError || !userRole || userRole.role !== 'admin') {
-        throw new Error('Apenas administradores podem excluir entregadores')
-      }
-
-      // Deletar registro de entregador
-      const { error: driverError, count: driverCount } = await supabase
-        .from('delivery_drivers')
-        .delete({ count: 'exact' })
-        .eq('id', driverId)
-
-      if (driverError) {
-        console.error('❌ [DELETE] Erro ao deletar delivery_drivers:', driverError)
-        throw new Error(`Erro ao deletar entregador: ${driverError.message}`)
-      }
-
-      if (driverCount === 0) {
-        throw new Error('Entregador não encontrado ou sem permissão para deletar')
-      }
-
-      // Deletar vínculos com organizações
-      const { error: orgError } = await supabase
-        .from('user_organizations')
-        .delete()
-        .eq('user_id', userId)
-        .eq('role', 'delivery_driver')
-
-      if (orgError) {
-        console.error('⚠️ [DELETE] Erro ao deletar user_organizations:', orgError)
-      }
-
-      toast.dismiss(loadingToast)
-      toast.success('Entregador excluído com sucesso!')
-      
-      console.log('✅ [DELETE] Exclusão concluída')
-
-    } catch (error: any) {
-      console.error('❌ [DELETE] Erro:', error)
-      toast.dismiss(loadingToast)
-      toast.error(error.message || 'Erro ao excluir entregador')
-      
-      // Recarregar lista em caso de erro
+      toast.success('Entregador excluído')
+    } catch (error) {
+      console.error('Erro ao excluir:', error)
+      toast.error('Erro ao excluir entregador')
+      // Recarregar em caso de erro
       await loadDrivers()
     }
   }
 
   const changePassword = async () => {
-    if (!newPassword || !selectedDriverId) {
-      toast.error('Digite a nova senha')
-      return
-    }
-
-    try {
-      toast.info('Funcionalidade de alteração de senha será implementada em breve.')
-      setShowPasswordDialog(false)
-      setNewPassword('')
-      setSelectedDriverId('')
-    } catch (error) {
-      console.error('Erro ao alterar senha:', error)
-      toast.error('Erro ao alterar senha')
-    }
+    toast.info('Funcionalidade em desenvolvimento')
+    setShowPasswordDialog(false)
+    setNewPassword('')
+    setSelectedDriverId('')
   }
 
   if (loading) {
@@ -727,14 +475,14 @@ export function DriversManagement() {
               <DialogTrigger asChild>
                 <Button className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl">
                   <Plus className="w-5 h-5 mr-2" />
-                  Cadastrar Entregador
+                  Novo Entregador
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Cadastrar Novo Entregador</DialogTitle>
+                  <DialogTitle>Novo Entregador</DialogTitle>
                   <DialogDescription>
-                    Preencha os dados do entregador para criar uma conta de acesso
+                    Criar conta de acesso para entregador
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
@@ -750,19 +498,16 @@ export function DriversManagement() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="email">E-mail *</Label>
+                    <Label htmlFor="email">Email *</Label>
                     <Input
                       id="email"
                       type="email"
                       value={newDriverData.email}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="joao@exemplo.com"
+                      placeholder="joao@email.com"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Use um email válido
-                    </p>
                   </div>
                   <div>
                     <Label htmlFor="phone">Telefone</Label>
@@ -782,13 +527,10 @@ export function DriversManagement() {
                       type="password"
                       value={newDriverData.password}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Mínimo 6 caracteres (sem espaços)"
+                      placeholder="Senha sem espaços"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Mínimo 6 caracteres, sem espaços
-                    </p>
                   </div>
                   <div className="flex gap-2 pt-4">
                     <Button
@@ -804,7 +546,7 @@ export function DriversManagement() {
                       className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                       disabled={creatingDriver}
                     >
-                      {creatingDriver ? '⏳ Criando...' : 'Cadastrar'}
+                      {creatingDriver ? 'Criando...' : 'Criar'}
                     </Button>
                   </div>
                 </div>
@@ -820,7 +562,7 @@ export function DriversManagement() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Entregadores
+                Total
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -833,7 +575,7 @@ export function DriversManagement() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
-                Online Agora
+                Online
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -846,7 +588,7 @@ export function DriversManagement() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
-                Receita Total Hoje
+                Receita Hoje
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -857,14 +599,14 @@ export function DriversManagement() {
           </Card>
         </div>
 
-        {/* Lista de Entregadores */}
+        {/* Lista */}
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-gray-800">
               Lista de Entregadores
             </CardTitle>
             <CardDescription>
-              Gerencie o status e acompanhe o desempenho dos entregadores
+              Gerencie entregadores e acompanhe status
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -928,7 +670,6 @@ export function DriversManagement() {
                       />
                     </div>
 
-                    {/* Ações */}
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
@@ -961,14 +702,14 @@ export function DriversManagement() {
                     Nenhum entregador cadastrado
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Comece cadastrando seu primeiro entregador
+                    Cadastre seu primeiro entregador
                   </p>
                   <Button 
                     onClick={() => setShowNewDriverDialog(true)}
                     className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                   >
                     <Plus className="w-5 h-5 mr-2" />
-                    Cadastrar Primeiro Entregador
+                    Primeiro Entregador
                   </Button>
                 </div>
               )}
@@ -977,13 +718,13 @@ export function DriversManagement() {
         </Card>
       </div>
 
-      {/* Dialog para trocar senha */}
+      {/* Dialog senha */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Alterar Senha</DialogTitle>
             <DialogDescription>
-              Digite a nova senha para o entregador
+              Nova senha para o entregador
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -994,7 +735,7 @@ export function DriversManagement() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Digite a nova senha"
+                placeholder="Nova senha"
                 className="rounded-xl"
               />
             </div>
@@ -1010,12 +751,11 @@ export function DriversManagement() {
               >
                 Cancelar
               </Button>
-              
               <Button
                 onClick={changePassword}
                 className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
               >
-                Alterar Senha
+                Alterar
               </Button>
             </div>
           </div>

@@ -122,6 +122,8 @@ export function ManualOrderForm() {
     if (!user) return
 
     try {
+      console.log('🔄 [FORM] Carregando dados iniciais...')
+
       // Carregar tipos de estabelecimento
       const { data: types } = await supabase
         .from('establishment_types')
@@ -129,6 +131,7 @@ export function ManualOrderForm() {
         .order('name')
 
       setEstablishmentTypes(types || [])
+      console.log('🏪 [FORM] Tipos de estabelecimento:', types?.length || 0)
 
       // Carregar entregadores
       const { data: userOrgs } = await supabase
@@ -137,9 +140,11 @@ export function ManualOrderForm() {
         .eq('user_id', user.id)
 
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+      console.log('🏢 [FORM] Organizações:', orgIds)
 
       if (orgIds.length > 0) {
-        const { data: drivers } = await supabase
+        // Buscar entregadores
+        const { data: drivers, error: driversError } = await supabase
           .from('delivery_drivers')
           .select(`
             id,
@@ -150,16 +155,20 @@ export function ManualOrderForm() {
           `)
           .in('organization_id', orgIds)
 
-        // Corrigir tipagem dos entregadores
-        const driversData: DeliveryDriver[] = drivers?.map((driver: any) => ({
-          id: driver.id,
-          is_online: driver.is_online,
-          profiles: {
-            full_name: driver.profiles?.full_name || 'Nome não informado'
-          }
-        })) || []
+        if (driversError) {
+          console.error('❌ [FORM] Erro ao buscar entregadores:', driversError)
+        } else {
+          const driversData: DeliveryDriver[] = drivers?.map((driver: any) => ({
+            id: driver.id,
+            is_online: driver.is_online,
+            profiles: {
+              full_name: driver.profiles?.full_name || 'Nome não informado'
+            }
+          })) || []
 
-        setDeliveryDrivers(driversData)
+          setDeliveryDrivers(driversData)
+          console.log('🚚 [FORM] Entregadores carregados:', driversData.length)
+        }
 
         // Carregar clientes
         const { data: customersData } = await supabase
@@ -169,9 +178,12 @@ export function ManualOrderForm() {
           .order('full_name')
 
         setCustomers(customersData || [])
+        console.log('👥 [FORM] Clientes carregados:', customersData?.length || 0)
       }
+
+      console.log('✅ [FORM] Dados iniciais carregados')
     } catch (error) {
-      console.error('Erro ao carregar dados:', error)
+      console.error('❌ [FORM] Erro ao carregar dados:', error)
       toast.error('Erro ao carregar dados')
     }
   }
@@ -371,7 +383,7 @@ export function ManualOrderForm() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                  Novo Pedido Manual +
+                  Novo Pedido Manual
                 </h1>
                 <p className="text-sm text-gray-600">Criar pedido detalhado</p>
               </div>
@@ -534,6 +546,21 @@ export function ManualOrderForm() {
                 <p className="text-sm text-blue-600 mt-2">
                   Modo automático ativo - Entregador selecionado por rodízio
                 </p>
+              )}
+              {deliveryDrivers.length === 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+                  <p className="text-sm text-yellow-800">
+                    Nenhum entregador encontrado. 
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="p-0 h-auto text-yellow-800 underline ml-1"
+                      onClick={() => router.push('/entregadores')}
+                    >
+                      Cadastre um entregador primeiro
+                    </Button>
+                  </p>
+                </div>
               )}
               {form.formState.errors.delivery_driver_id && (
                 <p className="text-sm text-red-500 mt-1">
@@ -722,7 +749,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || orderItems.length === 0}
+              disabled={loading || orderItems.length === 0 || deliveryDrivers.length === 0}
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
