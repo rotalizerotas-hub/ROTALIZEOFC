@@ -150,7 +150,16 @@ export function ManualOrderForm() {
           `)
           .in('organization_id', orgIds)
 
-        setDeliveryDrivers(drivers || [])
+        // Corrigir tipagem dos entregadores
+        const driversData: DeliveryDriver[] = drivers?.map((driver: any) => ({
+          id: driver.id,
+          is_online: driver.is_online,
+          profiles: {
+            full_name: driver.profiles?.full_name || 'Nome não informado'
+          }
+        })) || []
+
+        setDeliveryDrivers(driversData)
 
         // Carregar clientes
         const { data: customersData } = await supabase
@@ -246,6 +255,11 @@ export function ManualOrderForm() {
   }
 
   const onSubmit = async (data: OrderFormData) => {
+    if (!user) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
     if (orderItems.length === 0) {
       toast.error('Adicione pelo menos um item ao pedido')
       return
