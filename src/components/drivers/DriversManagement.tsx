@@ -336,33 +336,104 @@ export function DriversManagement() {
       // Garantir que o usuário tem uma organização
       const organizationId = await ensureUserHasOrganization()
 
-      console.log('🚀 [CREATE] Usando Edge Function para criar entregador...')
+      console.log('🚀 [CREATE] Criando usuário com signup normal...')
 
-      // Usar Edge Function para criar entregador (bypass validações do Supabase)
-      const { data: result, error: functionError } = await supabase.functions.invoke('create-driver', {
-        body: {
-          driverData: {
+      // Criar usuário usando signup normal
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newDriverData.email.trim(),
+        password: newDriverData.password,
+        options: {
+          data: {
             full_name: newDriverData.full_name,
-            email: newDriverData.email.trim(),
             phone: newDriverData.phone,
-            password: newDriverData.password
+            role: 'delivery_driver'
           },
-          organizationId: organizationId,
-          currentUserId: user.id
+          emailRedirectTo: undefined
         }
       })
 
-      if (functionError) {
-        console.error('❌ [CREATE] Erro na Edge Function:', functionError)
-        throw new Error(functionError.message || 'Erro ao criar entregador via Edge Function')
+      if (authError) {
+        console.error('❌ [CREATE] Erro do Supabase Auth:', authError)
+        throw new Error(authError.message || 'Erro ao criar usuário')
       }
 
-      if (!result?.success) {
-        console.error('❌ [CREATE] Edge Function retornou erro:', result?.error)
-        throw new Error(result?.error || 'Erro desconhecido ao criar entregador')
+      if (!authData.user) {
+        throw new Error('Usuário não foi criado')
       }
 
-      console.log('✅ [CREATE] Entregador criado via Edge Function:', result)
+      const newUserId = authData.user.id
+      console.log('✅ [CREATE] Usuário criado com ID:', newUserId)
+
+      // Aguardar um pouco para o trigger tentar criar o perfil
+      console.log('⏳ [CREATE] Aguardando trigger criar perfil...')
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      // Verificar se perfil já existe
+      console.log('🔍 [CREATE] Verificando se perfil já existe...')
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', newUserId)
+        .single()
+
+      if (!existingProfile) {
+        console.log('🔄 [CREATE] Perfil não existe, criando manualmente...')
+        // Usar upsert para evitar conflitos
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: newUserId,
+            email: newDriverData.email,
+            full_name: newDriverData.full_name,
+            phone: newDriverData.phone || ''
+          })
+
+        if (profileError) {
+          console.error('⚠️ [CREATE] Erro ao criar perfil:', profileError)
+          // Não falhar por causa do perfil, continuar
+        } else {
+          console.log('✅ [CREATE] Perfil criado com sucesso')
+        }
+      } else {
+        console.log('✅ [CREATE] Perfil já existe (criado pelo trigger)')
+      }
+
+      // Criar registro de entregador
+      console.log('🔄 [CREATE] Criando registro de entregador...')
+      const { data: driverData, error: driverError } = await supabase
+        .from('delivery_drivers')
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          is_online: false,
+          total_today: 0
+        })
+        .select()
+        .single()
+
+      if (driverError) {
+        console.error('❌ [CREATE] Erro ao criar registro de entregador:', driverError)
+        throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
+      }
+
+      console.log('✅ [CREATE] Registro de entregador criado:', driverData)
+
+      // Vincular à organização
+      console.log('🔄 [CREATE] Vinculando à organização...')
+      const { error: orgError } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: newUserId,
+          organization_id: organizationId,
+          role: 'delivery_driver'
+        })
+
+      if (orgError) {
+        console.error('❌ [CREATE] Erro ao vincular à organização:', orgError)
+        throw new Error('Erro ao vincular à organização: ' + orgError.message)
+      }
+
+      console.log('✅ [CREATE] Entregador vinculado à organização com sucesso')
 
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
@@ -673,6 +744,7 @@ export function DriversManagement() {
           </Card>
 
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
                 Receita Total Hoje
