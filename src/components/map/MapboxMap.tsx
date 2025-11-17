@@ -29,6 +29,19 @@ interface MapboxMapProps {
   className?: string
 }
 
+// Função helper para traduzir status
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    pending: 'Pendente',
+    assigned: 'Atribuído',
+    in_transit: 'Em trânsito',
+    delivered: 'Entregue',
+    cancelled: 'Cancelado'
+  }
+  
+  return statusMap[status] || status
+}
+
 export function MapboxMap({ organizations = [], orders = [], className = '' }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
@@ -143,20 +156,24 @@ export function MapboxMap({ organizations = [], orders = [], className = '' }: M
             if (e.features && e.features[0]) {
               const feature = e.features[0]
               const coordinates = (feature.geometry as any).coordinates.slice()
-              const { name, type, emoji } = feature.properties as any
+              const properties = feature.properties
+              
+              if (properties) {
+                const { name, type, emoji } = properties
 
-              new mapboxgl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(`
-                  <div class="p-3">
-                    <div class="flex items-center gap-2 mb-2">
-                      <span class="text-2xl">${emoji}</span>
-                      <h3 class="font-semibold text-gray-800">${name}</h3>
+                new mapboxgl.Popup()
+                  .setLngLat(coordinates)
+                  .setHTML(`
+                    <div class="p-3">
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="text-2xl">${emoji || '🏪'}</span>
+                        <h3 class="font-semibold text-gray-800">${name || 'Estabelecimento'}</h3>
+                      </div>
+                      <p class="text-sm text-gray-600">${type || 'Tipo não informado'}</p>
                     </div>
-                    <p class="text-sm text-gray-600">${type}</p>
-                  </div>
-                `)
-                .addTo(map.current!)
+                  `)
+                  .addTo(map.current!)
+              }
             }
           })
 
@@ -165,25 +182,22 @@ export function MapboxMap({ organizations = [], orders = [], className = '' }: M
             if (e.features && e.features[0]) {
               const feature = e.features[0]
               const coordinates = (feature.geometry as any).coordinates.slice()
-              const { customer_name, status } = feature.properties as any
+              const properties = feature.properties
+              
+              if (properties) {
+                const { customer_name, status } = properties
+                const statusText = getStatusText(status || 'unknown')
 
-              const statusText = {
-                pending: 'Pendente',
-                assigned: 'Atribuído',
-                in_transit: 'Em trânsito',
-                delivered: 'Entregue',
-                cancelled: 'Cancelado'
-              }[status] || status
-
-              new mapboxgl.Popup()
-                .setLngLat(coordinates)
-                .setHTML(`
-                  <div class="p-3">
-                    <h3 class="font-semibold text-gray-800 mb-1">${customer_name}</h3>
-                    <p class="text-sm text-gray-600">Status: ${statusText}</p>
-                  </div>
-                `)
-                .addTo(map.current!)
+                new mapboxgl.Popup()
+                  .setLngLat(coordinates)
+                  .setHTML(`
+                    <div class="p-3">
+                      <h3 class="font-semibold text-gray-800 mb-1">${customer_name || 'Cliente'}</h3>
+                      <p class="text-sm text-gray-600">Status: ${statusText}</p>
+                    </div>
+                  `)
+                  .addTo(map.current!)
+              }
             }
           })
 
