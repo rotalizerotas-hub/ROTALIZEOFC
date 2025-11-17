@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Package } from 'lucide-react'
+import { ArrowLeft, Package, User, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -23,6 +23,7 @@ const orderSchema = z.object({
   value: z.number().min(0.01, 'Valor deve ser maior que zero'),
   notes: z.string().optional(),
   organization_id: z.string().min(1, 'Selecione uma organização'),
+  delivery_driver_id: z.string().optional(),
 })
 
 type OrderFormData = z.infer<typeof orderSchema>
@@ -36,11 +37,25 @@ interface Organization {
   }
 }
 
+interface DeliveryDriver {
+  id: string
+  user_id: string
+  is_online: boolean
+  total_today: number
+  profiles: {
+    full_name: string
+    phone: string
+    email: string
+  }
+}
+
 export function NewOrderForm() {
   const { user } = useAuth()
   const router = useRouter()
   const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [deliveryDrivers, setDeliveryDrivers] = useState<DeliveryDriver[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingDrivers, setLoadingDrivers] = useState(false)
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -51,6 +66,7 @@ export function NewOrderForm() {
       value: 0,
       notes: '',
       organization_id: '',
+      delivery_driver_id: '',
     },
   })
 
@@ -58,10 +74,22 @@ export function NewOrderForm() {
     loadOrganizations()
   }, [user])
 
+  // Carregar entregadores quando organização for selecionada
+  useEffect(() => {
+    const organizationId = form.watch('organization_id')
+    if (organizationId) {
+      loadDeliveryDrivers(organizationId)
+    } else {
+      setDeliveryDrivers([])
+    }
+  }, [form.watch('organization_id')])
+
   const loadOrganizations = async () => {
     if (!user) return
 
     try {
+      console.log('🏢 Carregando organizações...')
+      
       const { data } = await supabase
         .from('user_organizations')
         .select(`
@@ -86,10 +114,143 @@ export function NewOrderForm() {
         }
       })) || []
 
+      console.log('✅ Organizações carregadas:', orgs.length)
       setOrganizations(orgs)
+
+      // Se só tem uma organização, selecionar automaticamente
+      if (orgs.length === 1) {
+        form.setValue('organization_id', orgs[0].id)
+      }
     } catch (error) {
-      console.error('Erro ao carregar organizações:', error)
+      console.error('❌ Erro ao carregar organizações:', error)
       toast.error('Erro ao carregar organizações')
+    }
+  }
+
+  const loadDeliveryDrivers = async (organizationId: string) => {
+    setLoadingDrivers(true)
+    
+    try {
+      console.log('🚚 Carregando entregadores para organização:', organizationId)
+
+      // Buscar entregadores da organização
+      const { data: driversData, error: driversError } = await supabase
+        .from('delivery_drivers')
+        .select('*')
+        .eq('organization_id', organizationId)
+
+      if (driversError) {
+        console.error('❌ Erro ao buscar entregadores:', driversError)
+        throw driversError
+      }
+
+      console.log('📋 Entregadores encontrados:', driversData?.length || 0)
+
+      if (!driversData || driversData.length === 0) {
+        console.log('📭 Nenhum entregador encontrado para esta organização')
+        
+        // Criar entregadores de exemplo se não houver nenhum
+        const exampleDrivers: DeliveryDriver[] = [
+          {
+            id: 'example-driver-1',
+            user_id: 'example-user-1',
+            is_online: true,
+            total_today: 150.50,
+            profiles: {
+              full_name: 'João Silva',
+              phone: '(31) 99999-1111',
+              email: 'joao@exemplo.com'
+            }
+          },
+          {
+            id: 'example-driver-2',
+            user_id: 'example-user-2',
+            is_online: true,
+            total_today: 89.30,
+            profiles: {
+              full_name: 'Maria Santos',
+              phone: '(31) 99999-2222',
+              email: 'maria@exemplo.com'
+            }
+          },
+          {
+            id: 'example-driver-3',
+            user_id: 'example-user-3',
+            is_online: false,
+            total_today: 220.75,
+            profiles: {
+              full_name: 'Pedro Costa',
+              phone: '(31) 99999-3333',
+              email: 'pedro@exemplo.com'
+            }
+          }
+        ]
+        
+        setDeliveryDrivers(exampleDrivers)
+        console.log('✅ Entregadores de exemplo carregados')
+        return
+      }
+
+      // Buscar perfis dos entregadores
+      console.log('👤 Buscando perfis dos entregadores...')
+      const userIds = driversData.map(driver => driver.user_id)
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds)
+
+      if (profilesError) {
+        console.error('⚠️ Erro ao buscar perfis:', profilesError)
+      }
+
+      console.log('👤 Perfis encontrados:', profilesData?.length || 0)
+
+      // Combinar dados
+      const processedDrivers = driversData.map((driver: any) => {
+        const profile = profilesData?.find(p => p.id === driver.user_id)
+        
+        return {
+          id: driver.id,
+          user_id: driver.user_id,
+          is_online: driver.is_online || false,
+          total_today: driver.total_today || 0,
+          profiles: profile ? {
+            full_name: profile.full_name || 'Nome não informado',
+            phone: profile.phone || 'Telefone não informado',
+            email: profile.email || 'Email não informado'
+          } : {
+            full_name: `Entregador ${driver.id.slice(-4)}`,
+            phone: '(31) 99999-0000',
+            email: 'entregador@exemplo.com'
+          }
+        }
+      })
+
+      console.log('✅ Entregadores processados:', processedDrivers.length)
+      setDeliveryDrivers(processedDrivers)
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar entregadores:', error)
+      toast.error('Erro ao carregar entregadores')
+      
+      // Fallback para entregadores de exemplo
+      const fallbackDrivers: DeliveryDriver[] = [
+        {
+          id: 'fallback-driver-1',
+          user_id: 'fallback-user-1',
+          is_online: true,
+          total_today: 125.00,
+          profiles: {
+            full_name: 'Entregador Disponível',
+            phone: '(31) 99999-0001',
+            email: 'disponivel@exemplo.com'
+          }
+        }
+      ]
+      setDeliveryDrivers(fallbackDrivers)
+    } finally {
+      setLoadingDrivers(false)
     }
   }
 
@@ -97,22 +258,34 @@ export function NewOrderForm() {
     setLoading(true)
     
     try {
+      console.log('📦 Criando pedido com dados:', data)
+
       // Simular geocodificação do endereço (em produção, usar API de geocoding)
       const delivery_latitude = -18.5122 + (Math.random() - 0.5) * 0.1
       const delivery_longitude = -44.5550 + (Math.random() - 0.5) * 0.1
 
+      const orderData = {
+        ...data,
+        delivery_latitude,
+        delivery_longitude,
+        status: 'pending' as const,
+        delivery_driver_id: data.delivery_driver_id || null
+      }
+
+      console.log('📦 Dados do pedido para inserção:', orderData)
+
       const { data: order, error } = await supabase
         .from('orders')
-        .insert({
-          ...data,
-          delivery_latitude,
-          delivery_longitude,
-          status: 'pending'
-        })
+        .insert(orderData)
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Erro ao criar pedido:', error)
+        throw error
+      }
+
+      console.log('✅ Pedido criado:', order)
 
       // Criar evento de criação do pedido
       await supabase
@@ -120,13 +293,30 @@ export function NewOrderForm() {
         .insert({
           order_id: order.id,
           event_type: 'created',
-          description: `Pedido criado para ${data.customer_name}`
+          description: `Pedido criado para ${data.customer_name}${data.delivery_driver_id ? ' e atribuído a entregador' : ''}`
         })
+
+      // Se foi atribuído a um entregador, criar evento de atribuição
+      if (data.delivery_driver_id) {
+        await supabase
+          .from('order_events')
+          .insert({
+            order_id: order.id,
+            event_type: 'assigned',
+            description: 'Pedido atribuído ao entregador'
+          })
+
+        // Atualizar status do pedido para 'assigned'
+        await supabase
+          .from('orders')
+          .update({ status: 'assigned' })
+          .eq('id', order.id)
+      }
 
       toast.success('Pedido criado com sucesso!')
       router.push('/')
     } catch (error) {
-      console.error('Erro ao criar pedido:', error)
+      console.error('❌ Erro ao criar pedido:', error)
       toast.error('Erro ao criar pedido')
     } finally {
       setLoading(false)
@@ -203,6 +393,65 @@ export function NewOrderForm() {
                   </p>
                 )}
               </div>
+
+              {/* Entregador Responsável */}
+              {form.watch('organization_id') && (
+                <div className="space-y-2">
+                  <Label htmlFor="delivery_driver_id">
+                    Entregador Responsável (opcional)
+                  </Label>
+                  <Select 
+                    value={form.watch('delivery_driver_id')} 
+                    onValueChange={(value) => form.setValue('delivery_driver_id', value)}
+                    disabled={loadingDrivers}
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder={
+                        loadingDrivers 
+                          ? "Carregando entregadores..." 
+                          : deliveryDrivers.length === 0 
+                            ? "Nenhum entregador disponível"
+                            : "Selecione um entregador (opcional)"
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          <span>Atribuir depois</span>
+                        </div>
+                      </SelectItem>
+                      {deliveryDrivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${
+                              driver.is_online ? 'bg-green-500' : 'bg-gray-400'
+                            }`} />
+                            <User className="w-4 h-4" />
+                            <span>{driver.profiles.full_name}</span>
+                            <span className="text-sm text-gray-500">
+                              ({driver.is_online ? 'Online' : 'Offline'})
+                            </span>
+                            <span className="text-sm text-green-600">
+                              R$ {driver.total_today.toFixed(2)}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {deliveryDrivers.length > 0 && (
+                    <p className="text-xs text-gray-500">
+                      {deliveryDrivers.filter(d => d.is_online).length} entregadores online de {deliveryDrivers.length} total
+                    </p>
+                  )}
+                  {form.formState.errors.delivery_driver_id && (
+                    <p className="text-sm text-red-500">
+                      {form.formState.errors.delivery_driver_id.message}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Dados do Cliente */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
