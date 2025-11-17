@@ -107,13 +107,74 @@ export function DriversManagement() {
     }
   }
 
-  const createNewDriver = async () => {
-    if (!user) {
-      toast.error('Usuário não autenticado')
-      return
+  const ensureUserHasOrganization = async (): Promise<string> => {
+    if (!user) throw new Error('Usuário não autenticado')
+
+    // Verificar se usuário já tem organização
+    const { data: userOrgs } = await supabase
+      .from('user_organizations')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .limit(1)
+
+    if (userOrgs && userOrgs.length > 0) {
+      return userOrgs[0].organization_id
     }
 
-    if (!newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
+    // Se não tem organização, criar uma padrão
+    console.log('Usuário não possui organização, criando organização padrão...')
+
+    // Buscar um tipo de estabelecimento padrão
+    const { data: establishmentTypes } = await supabase
+      .from('establishment_types')
+      .select('id')
+      .limit(1)
+
+    const defaultEstablishmentTypeId = establishmentTypes?.[0]?.id
+
+    if (!defaultEstablishmentTypeId) {
+      throw new Error('Nenhum tipo de estabelecimento encontrado')
+    }
+
+    // Criar organização padrão
+    const { data: newOrg, error: orgError } = await supabase
+      .from('organizations')
+      .insert({
+        name: 'Minha Empresa',
+        address: 'Endereço da empresa',
+        phone: '(31) 99999-9999',
+        establishment_type_id: defaultEstablishmentTypeId,
+        latitude: -18.5122,
+        longitude: -44.5550
+      })
+      .select()
+      .single()
+
+    if (orgError) {
+      console.error('Erro ao criar organização:', orgError)
+      throw new Error('Erro ao criar organização padrão')
+    }
+
+    // Vincular usuário à organização como admin
+    const { error: userOrgError } = await supabase
+      .from('user_organizations')
+      .insert({
+        user_id: user.id,
+        organization_id: newOrg.id,
+        role: 'admin'
+      })
+
+    if (userOrgError) {
+      console.error('Erro ao vincular usuário à organização:', userOrgError)
+      throw new Error('Erro ao vincular usuário à organização')
+    }
+
+    toast.success('Organização padrão criada com sucesso!')
+    return newOrg.id
+  }
+
+  const createNewDriver = async () => {
+    if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
       toast.error('Preencha todos os campos obrigatórios')
       return
     }
@@ -122,174 +183,30 @@ export function DriversManagement() {
 
     try {
       console.log('=== INICIANDO CRIAÇÃO DE ENTREGADOR ===')
-      console.log('Usuário atual:', user.id)
-      console.log('Dados do entregador:', { 
-        name: newDriverData.full_name, 
-        email: newDriverData.email,
-        phone: newDriverData.phone 
-      })
 
-      // PASSO 1: Verificar/Criar organização
-      console.log('PASSO 1: Verificando organização do usuário...')
-      
-      const { data: userOrgs, error: userOrgsError } = await supabase
-        .from('user_organizations')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .limit(1)
+      // Garantir que o usuário tem uma organização
+      const organizationId = await ensureUserHasOrganization()
+      console.log('Organização confirmada:', organizationId)
 
-      if (userOrgsError) {
-        console.error('Erro ao buscar organizações:', userOrgsError)
-        throw new Error('Erro ao verificar organizações do usuário')
-      }
-
-      let organizationId: string
-
-      if (!userOrgs || userOrgs.length === 0) {
-        console.log('Usuário não possui organização. Criando organização padrão...')
-        
-        // Buscar tipo de estabelecimento padrão
-        const { data: establishmentTypes, error: etError } = await supabase
-          .from('establishment_types')
-          .select('id')
-          .limit(1)
-
-        if (etError || !establishmentTypes || establishmentTypes.length === 0) {
-          console.error('Erro ao buscar tipos de estabelecimento:', etError)
-          throw new Error('Nenhum tipo de estabelecimento encontrado no sistema')
-        }
-
-        const defaultEstablishmentTypeId = establishmentTypes[0].id
-        console.log('Tipo de estabelecimento padrão:', defaultEstablishmentTypeId)
-
-        // Criar organização
-        const { data: newOrg, error: orgError } = await supabase
-          .from('organizations')
-          .insert({
-            name: 'Minha Empresa',
-            address: 'Endereço da empresa',
-            phone: '(31) 99999-9999',
-            establishment_type_id: defaultEstablishmentTypeId,
-            latitude: -18.5122,
-            longitude: -44.5550
-          })
-          .select()
-          .single()
-
-        if (orgError || !newOrg) {
-          console.error('Erro ao criar organização:', orgError)
-          throw new Error('Erro ao criar organização padrão')
-        }
-
-        organizationId = newOrg.id
-        console.log('Organização criada:', organizationId)
-
-        // Vincular usuário à organização
-        const { error: userOrgError } = await supabase
-          .from('user_organizations')
-          .insert({
-            user_id: user.id,
-            organization_id: organizationId,
-            role: 'admin'
-          })
-
-        if (userOrgError) {
-          console.error('Erro ao vincular usuário à organização:', userOrgError)
-          throw new Error('Erro ao vincular usuário à organização')
-        }
-
-        console.log('Usuário vinculado à organização como admin')
-        toast.success('Organização padrão criada!')
-      } else {
-        organizationId = userOrgs[0].organization_id
-        console.log('Organização existente encontrada:', organizationId)
-      }
-
-      // PASSO 2: Criar usuário no Auth
-      console.log('PASSO 2: Criando usuário no Supabase Auth...')
-      
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: newDriverData.email,
-        password: newDriverData.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone,
-          role: 'delivery_driver'
+      // Chamar edge function para criar entregador
+      const { data, error } = await supabase.functions.invoke('create-driver', {
+        body: {
+          driverData: newDriverData,
+          organizationId: organizationId,
+          currentUserId: user.id
         }
       })
 
-      if (authError || !authData.user) {
-        console.error('Erro ao criar usuário no Auth:', authError)
-        throw new Error(`Erro ao criar conta: ${authError?.message || 'Usuário não criado'}`)
+      if (error) {
+        console.error('Erro na edge function:', error)
+        throw new Error(error.message || 'Erro ao chamar função de criação')
       }
 
-      const newUserId = authData.user.id
-      console.log('Usuário criado no Auth:', newUserId)
-
-      // PASSO 3: Criar perfil
-      console.log('PASSO 3: Criando perfil do usuário...')
-      
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserId,
-          email: newDriverData.email,
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone
-        })
-
-      if (profileError) {
-        console.error('Erro ao criar perfil:', profileError)
-        // Tentar limpar o usuário criado
-        await supabase.auth.admin.deleteUser(newUserId)
-        throw new Error(`Erro ao criar perfil: ${profileError.message}`)
+      if (!data.success) {
+        throw new Error(data.error || 'Erro desconhecido na criação')
       }
 
-      console.log('Perfil criado com sucesso')
-
-      // PASSO 4: Criar registro de entregador
-      console.log('PASSO 4: Criando registro de entregador...')
-      
-      const { error: driverError } = await supabase
-        .from('delivery_drivers')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          is_online: false,
-          total_today: 0
-        })
-
-      if (driverError) {
-        console.error('Erro ao criar registro de entregador:', driverError)
-        // Tentar limpar dados criados
-        await supabase.auth.admin.deleteUser(newUserId)
-        throw new Error(`Erro ao criar registro de entregador: ${driverError.message}`)
-      }
-
-      console.log('Registro de entregador criado com sucesso')
-
-      // PASSO 5: Vincular à organização
-      console.log('PASSO 5: Vinculando entregador à organização...')
-      
-      const { error: orgLinkError } = await supabase
-        .from('user_organizations')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          role: 'delivery_driver'
-        })
-
-      if (orgLinkError) {
-        console.error('Erro ao vincular entregador à organização:', orgLinkError)
-        // Tentar limpar dados criados
-        await supabase.auth.admin.deleteUser(newUserId)
-        throw new Error(`Erro ao vincular à organização: ${orgLinkError.message}`)
-      }
-
-      console.log('Entregador vinculado à organização com sucesso')
       console.log('=== ENTREGADOR CRIADO COM SUCESSO ===')
-
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
@@ -333,9 +250,15 @@ export function DriversManagement() {
     if (!confirm('Tem certeza que deseja excluir este entregador?')) return
 
     try {
-      // Deletar usuário do Supabase Auth (isso cascateia para outras tabelas)
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId)
-      if (authError) throw authError
+      // Chamar edge function para deletar entregador
+      const { data, error } = await supabase.functions.invoke('delete-driver', {
+        body: {
+          userId: userId,
+          currentUserId: user?.id
+        }
+      })
+
+      if (error) throw error
 
       toast.success('Entregador excluído com sucesso!')
       loadDrivers()
@@ -355,8 +278,13 @@ export function DriversManagement() {
       const driver = drivers.find(d => d.id === selectedDriverId)
       if (!driver) throw new Error('Entregador não encontrado')
 
-      const { error } = await supabase.auth.admin.updateUserById(driver.user_id, {
-        password: newPassword
+      // Chamar edge function para alterar senha
+      const { data, error } = await supabase.functions.invoke('change-driver-password', {
+        body: {
+          userId: driver.user_id,
+          newPassword: newPassword,
+          currentUserId: user?.id
+        }
       })
 
       if (error) throw error
