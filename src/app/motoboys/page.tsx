@@ -2,9 +2,9 @@
 
 import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
-import { Dashboard } from '@/components/dashboard/Dashboard'
+import { DriversManagement } from '@/components/drivers/DriversManagement'
 
-export default function Home() {
+export default function MotoboyPage() {
   const { user, loading } = useAuth()
 
   if (loading) {
@@ -24,5 +24,5 @@ export default function Home() {
     return <LoginForm />
   }
 
-  return <Dashboard />
+  return <DriversManagement />
 }

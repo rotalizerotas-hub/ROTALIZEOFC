@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/components/auth/AuthProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -13,8 +15,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rotalize - Transforme suas ideias em realidade",
-  description: "Plataforma inovadora para desenvolvimento de soluções modernas e eficientes",
+  title: "Rotalize - Sistema de Gestão de Entregas",
+  description: "Plataforma completa para gerenciamento de entregas e motoboys",
 };
 
 export default function RootLayout({
@@ -27,7 +29,17 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          {children}
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              style: {
+                borderRadius: '12px',
+              },
+            }}
+          />
+        </AuthProvider>
       </body>
     </html>
   );
