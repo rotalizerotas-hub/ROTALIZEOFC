@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { Plus, Users, Map, Package, TrendingUp } from 'lucide-react'
+import { Plus, Users, Map, Package, TrendingUp, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Organization {
@@ -267,11 +267,11 @@ export function Dashboard() {
         {/* Botões de Ação */}
         <div className="flex flex-wrap gap-4 mb-8">
           <Button 
-            onClick={() => router.push('/novo-pedido')}
+            onClick={() => router.push('/novo-pedido-manual')}
             className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3"
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Novo Pedido
+            <FileText className="w-5 h-5 mr-2" />
+            Novo Pedido Manual
           </Button>
           <Button 
             onClick={() => router.push('/motoboys')}
@@ -279,7 +279,23 @@ export function Dashboard() {
             className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
           >
             <Users className="w-5 h-5 mr-2" />
-            Gerenciar Motoboys
+            Entregadores
+          </Button>
+          <Button 
+            onClick={() => router.push('/clientes')}
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Users className="w-5 h-5 mr-2" />
+            Clientes
+          </Button>
+          <Button 
+            onClick={() => router.push('/produtos')}
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Package className="w-5 h-5 mr-2" />
+            Produtos
           </Button>
           <Button 
             variant="outline"
