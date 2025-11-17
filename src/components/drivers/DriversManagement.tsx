@@ -57,22 +57,23 @@ export function DriversManagement() {
     if (!user) return
 
     try {
+      console.log('Carregando entregadores...')
+
       // Buscar organizações do usuário
-      const { data: userOrgs } = await supabase
+      const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
         .select('organization_id')
         .eq('user_id', user.id)
 
-      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
-
-      if (orgIds.length === 0) {
-        setDrivers([])
-        setLoading(false)
-        return
+      if (userOrgsError) {
+        console.error('Erro ao buscar organizações:', userOrgsError)
       }
 
-      // Buscar entregadores das organizações
-      const { data } = await supabase
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+      console.log('Organizações do usuário:', orgIds)
+
+      // Se não tem organização, buscar todos os entregadores (para debug)
+      let driversQuery = supabase
         .from('delivery_drivers')
         .select(`
           *,
@@ -82,23 +83,61 @@ export function DriversManagement() {
             email
           )
         `)
-        .in('organization_id', orgIds)
 
-      const driversData = data?.map((driver: any) => ({
-        id: driver.id,
-        user_id: driver.user_id,
-        is_online: driver.is_online,
-        total_today: driver.total_today,
-        current_latitude: driver.current_latitude,
-        current_longitude: driver.current_longitude,
-        profiles: driver.profiles || {
-          full_name: 'Nome não informado',
-          phone: 'Telefone não informado',
-          email: 'Email não informado'
+      // Se tem organizações, filtrar por elas
+      if (orgIds.length > 0) {
+        driversQuery = driversQuery.in('organization_id', orgIds)
+      }
+
+      const { data: driversData, error: driversError } = await driversQuery
+
+      if (driversError) {
+        console.error('Erro ao buscar entregadores:', driversError)
+        throw driversError
+      }
+
+      console.log('Dados brutos dos entregadores:', driversData)
+
+      // Processar dados dos entregadores
+      const processedDrivers = driversData?.map((driver: any) => {
+        console.log('Processando entregador:', driver)
+        
+        return {
+          id: driver.id,
+          user_id: driver.user_id,
+          is_online: driver.is_online || false,
+          total_today: driver.total_today || 0,
+          current_latitude: driver.current_latitude,
+          current_longitude: driver.current_longitude,
+          profiles: driver.profiles || {
+            full_name: 'Nome não informado',
+            phone: 'Telefone não informado',
+            email: 'Email não informado'
+          }
         }
-      })) || []
+      }) || []
 
-      setDrivers(driversData)
+      console.log('Entregadores processados:', processedDrivers)
+      setDrivers(processedDrivers)
+
+      // Se não encontrou entregadores mas tem organizações, buscar sem filtro para debug
+      if (processedDrivers.length === 0 && orgIds.length > 0) {
+        console.log('Nenhum entregador encontrado com filtro, buscando todos para debug...')
+        
+        const { data: allDrivers } = await supabase
+          .from('delivery_drivers')
+          .select(`
+            *,
+            profiles (
+              full_name,
+              phone,
+              email
+            )
+          `)
+
+        console.log('Todos os entregadores no banco:', allDrivers)
+      }
+
     } catch (error) {
       console.error('Erro ao carregar entregadores:', error)
       toast.error('Erro ao carregar entregadores')
@@ -720,6 +759,7 @@ export function DriversManagement() {
                         <Key className="w-4 h-4" />
                       </Button>
                       <Button
+                
                         variant="outline"
                         size="sm"
                         onClick={() => deleteDriver(driver.id, driver.user_id)}
