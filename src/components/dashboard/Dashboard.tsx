@@ -239,7 +239,7 @@ export function Dashboard() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
                 <Users className="w-4 h-4 text-green-500" />
-                Motoboys Online
+                Entregadores Online
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -274,7 +274,7 @@ export function Dashboard() {
             Novo Pedido Manual
           </Button>
           <Button 
-            onClick={() => router.push('/motoboys')}
+            onClick={() => router.push('/entregadores')}
             variant="outline"
             className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
           >

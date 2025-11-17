@@ -5,9 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Users, Plus, MapPin } from 'lucide-react'
+import { ArrowLeft, Users, Plus, MapPin, Edit, Trash2, Key } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -30,6 +33,20 @@ export function DriversManagement() {
   const router = useRouter()
   const [drivers, setDrivers] = useState<DeliveryDriver[]>([])
   const [loading, setLoading] = useState(true)
+  const [showNewDriverDialog, setShowNewDriverDialog] = useState(false)
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('')
+  
+  // Estados para novo entregador
+  const [newDriverData, setNewDriverData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    password: ''
+  })
+
+  // Estado para trocar senha
+  const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
     loadDrivers()
@@ -107,10 +124,130 @@ export function DriversManagement() {
           : driver
       ))
 
-      toast.success(`Motoboy ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`)
+      toast.success(`Entregador ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`)
     } catch (error) {
       console.error('Erro ao alterar status do entregador:', error)
       toast.error('Erro ao alterar status do entregador')
+    }
+  }
+
+  const createNewDriver = async () => {
+    if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
+      toast.error('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    try {
+      // Buscar organização do usuário
+      const { data: userOrgs } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .limit(1)
+
+      if (!userOrgs || userOrgs.length === 0) {
+        throw new Error('Usuário não possui organização')
+      }
+
+      const organizationId = userOrgs[0].organization_id
+
+      // Criar usuário no Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: newDriverData.email,
+        password: newDriverData.password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone,
+          role: 'delivery_driver'
+        }
+      })
+
+      if (authError) throw authError
+
+      // Criar perfil do entregador
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          email: newDriverData.email,
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone
+        })
+
+      if (profileError) throw profileError
+
+      // Criar registro de entregador
+      const { error: driverError } = await supabase
+        .from('delivery_drivers')
+        .insert({
+          user_id: authData.user.id,
+          organization_id: organizationId,
+          is_online: false
+        })
+
+      if (driverError) throw driverError
+
+      // Criar vínculo com organização
+      const { error: orgError } = await supabase
+        .from('user_organizations')
+        .insert({
+          user_id: authData.user.id,
+          organization_id: organizationId,
+          role: 'delivery_driver'
+        })
+
+      if (orgError) throw orgError
+
+      toast.success('Entregador cadastrado com sucesso!')
+      setShowNewDriverDialog(false)
+      setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
+      loadDrivers()
+    } catch (error) {
+      console.error('Erro ao criar entregador:', error)
+      toast.error('Erro ao criar entregador')
+    }
+  }
+
+  const deleteDriver = async (driverId: string, userId: string) => {
+    if (!confirm('Tem certeza que deseja excluir este entregador?')) return
+
+    try {
+      // Deletar usuário do Supabase Auth (isso cascateia para outras tabelas)
+      const { error: authError } = await supabase.auth.admin.deleteUser(userId)
+      if (authError) throw authError
+
+      toast.success('Entregador excluído com sucesso!')
+      loadDrivers()
+    } catch (error) {
+      console.error('Erro ao excluir entregador:', error)
+      toast.error('Erro ao excluir entregador')
+    }
+  }
+
+  const changePassword = async () => {
+    if (!newPassword || !selectedDriverId) {
+      toast.error('Digite a nova senha')
+      return
+    }
+
+    try {
+      const driver = drivers.find(d => d.id === selectedDriverId)
+      if (!driver) throw new Error('Entregador não encontrado')
+
+      const { error } = await supabase.auth.admin.updateUserById(driver.user_id, {
+        password: newPassword
+      })
+
+      if (error) throw error
+
+      toast.success('Senha alterada com sucesso!')
+      setShowPasswordDialog(false)
+      setNewPassword('')
+      setSelectedDriverId('')
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error)
+      toast.error('Erro ao alterar senha')
     }
   }
 
@@ -121,7 +258,7 @@ export function DriversManagement() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
             <Users className="w-8 h-8 text-white" />
           </div>
-          <p className="text-gray-600">Carregando motoboys...</p>
+          <p className="text-gray-600">Carregando entregadores...</p>
         </div>
       </div>
     )
@@ -147,18 +284,88 @@ export function DriversManagement() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                    Motoboys
+                    Entregadores
                   </h1>
                   <p className="text-sm text-gray-600">Gerenciar entregadores</p>
                 </div>
               </div>
             </div>
-            <Button 
-              className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Cadastrar Motoboy
-            </Button>
+            
+            <Dialog open={showNewDriverDialog} onOpenChange={setShowNewDriverDialog}>
+              <DialogTrigger asChild>
+                <Button className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl">
+                  <Plus className="w-5 h-5 mr-2" />
+                  Cadastrar Entregador
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Cadastrar Novo Entregador</DialogTitle>
+                  <DialogDescription>
+                    Preencha os dados do entregador para criar uma conta de acesso
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="full_name">Nome Completo *</Label>
+                    <Input
+                      id="full_name"
+                      value={newDriverData.full_name}
+                      onChange={(e) => setNewDriverData(prev => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="João Silva"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">E-mail *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newDriverData.email}
+                      onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="joao@email.com"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Telefone</Label>
+                    <Input
+                      id="phone"
+                      value={newDriverData.phone}
+                      onChange={(e) => setNewDriverData(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="(31) 99999-9999"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="password">Senha *</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={newDriverData.password}
+                      onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder="Senha de acesso"
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowNewDriverDialog(false)}
+                      className="flex-1 rounded-xl"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      onClick={createNewDriver}
+                      className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                    >
+                      Cadastrar
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </header>
@@ -169,7 +376,7 @@ export function DriversManagement() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Motoboys
+                Total de Entregadores
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -206,11 +413,11 @@ export function DriversManagement() {
           </Card>
         </div>
 
-        {/* Lista de Motoboys */}
+        {/* Lista de Entregadores */}
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-gray-800">
-              Lista de Motoboys
+              Lista de Entregadores
             </CardTitle>
             <CardDescription>
               Gerencie o status e acompanhe o desempenho dos entregadores
@@ -276,6 +483,29 @@ export function DriversManagement() {
                         onCheckedChange={() => toggleDriverStatus(driver.id, driver.is_online)}
                       />
                     </div>
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedDriverId(driver.id)
+                          setShowPasswordDialog(true)
+                        }}
+                        className="rounded-xl"
+                      >
+                        <Key className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deleteDriver(driver.id, driver.user_id)}
+                        className="rounded-xl text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -284,14 +514,17 @@ export function DriversManagement() {
                 <div className="text-center py-12">
                   <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Nenhum motoboy cadastrado
+                    Nenhum entregador cadastrado
                   </h3>
                   <p className="text-gray-600 mb-6">
                     Comece cadastrando seu primeiro entregador
                   </p>
-                  <Button className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl">
+                  <Button 
+                    onClick={() => setShowNewDriverDialog(true)}
+                    className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                  >
                     <Plus className="w-5 h-5 mr-2" />
-                    Cadastrar Primeiro Motoboy
+                    Cadastrar Primeiro Entregador
                   </Button>
                 </div>
               )}
@@ -299,6 +532,50 @@ export function DriversManagement() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog para trocar senha */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Alterar Senha</DialogTitle>
+            <DialogDescription>
+              Digite a nova senha para o entregador
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="new_password">Nova Senha</Label>
+              <Input
+                id="new_password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Digite a nova senha"
+                className="rounded-xl"
+              />
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowPasswordDialog(false)
+                  setNewPassword('')
+                  setSelectedDriverId('')
+                }}
+                className="flex-1 rounded-xl"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={changePassword}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+              >
+                Alterar Senha
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
