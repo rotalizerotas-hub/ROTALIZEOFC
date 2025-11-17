@@ -59,7 +59,8 @@ export function DriversManagement() {
     try {
       console.log('Carregando entregadores...')
 
-      // Buscar organizações do usuário
+      // Primeiro, buscar organizações do usuário
+      console.log('Buscando organizações do usuário...')
       const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
         .select('organization_id')
@@ -72,17 +73,11 @@ export function DriversManagement() {
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
       console.log('Organizações do usuário:', orgIds)
 
-      // Se não tem organização, buscar todos os entregadores (para debug)
+      // Buscar entregadores sem JOIN primeiro
+      console.log('Buscando entregadores...')
       let driversQuery = supabase
         .from('delivery_drivers')
-        .select(`
-          *,
-          profiles (
-            full_name,
-            phone,
-            email
-          )
-        `)
+        .select('*')
 
       // Se tem organizações, filtrar por elas
       if (orgIds.length > 0) {
@@ -96,11 +91,34 @@ export function DriversManagement() {
         throw driversError
       }
 
-      console.log('Dados brutos dos entregadores:', driversData)
+      console.log('Entregadores encontrados:', driversData)
 
-      // Processar dados dos entregadores
-      const processedDrivers = driversData?.map((driver: any) => {
-        console.log('Processando entregador:', driver)
+      if (!driversData || driversData.length === 0) {
+        console.log('Nenhum entregador encontrado')
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
+      // Buscar perfis dos entregadores separadamente
+      console.log('Buscando perfis dos entregadores...')
+      const userIds = driversData.map(driver => driver.user_id)
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds)
+
+      if (profilesError) {
+        console.error('Erro ao buscar perfis:', profilesError)
+        // Continuar mesmo sem perfis
+      }
+
+      console.log('Perfis encontrados:', profilesData)
+
+      // Combinar dados
+      const processedDrivers = driversData.map((driver: any) => {
+        const profile = profilesData?.find(p => p.id === driver.user_id)
         
         return {
           id: driver.id,
@@ -109,34 +127,20 @@ export function DriversManagement() {
           total_today: driver.total_today || 0,
           current_latitude: driver.current_latitude,
           current_longitude: driver.current_longitude,
-          profiles: driver.profiles || {
+          profiles: profile ? {
+            full_name: profile.full_name || 'Nome não informado',
+            phone: profile.phone || 'Telefone não informado',
+            email: profile.email || 'Email não informado'
+          } : {
             full_name: 'Nome não informado',
             phone: 'Telefone não informado',
             email: 'Email não informado'
           }
         }
-      }) || []
+      })
 
       console.log('Entregadores processados:', processedDrivers)
       setDrivers(processedDrivers)
-
-      // Se não encontrou entregadores mas tem organizações, buscar sem filtro para debug
-      if (processedDrivers.length === 0 && orgIds.length > 0) {
-        console.log('Nenhum entregador encontrado com filtro, buscando todos para debug...')
-        
-        const { data: allDrivers } = await supabase
-          .from('delivery_drivers')
-          .select(`
-            *,
-            profiles (
-              full_name,
-              phone,
-              email
-            )
-          `)
-
-        console.log('Todos os entregadores no banco:', allDrivers)
-      }
 
     } catch (error) {
       console.error('Erro ao carregar entregadores:', error)
@@ -750,7 +754,7 @@ export function DriversManagement() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedDriverId(driver.id)
+                          setSelectedDriverId(driver.i
                           setShowPasswordDialog(true)
                         }}
                         className="rounded-xl"
@@ -759,7 +763,6 @@ export function DriversManagement() {
                         <Key className="w-4 h-4" />
                       </Button>
                       <Button
-                
                         variant="outline"
                         size="sm"
                         onClick={() => deleteDriver(driver.id, driver.user_id)}
