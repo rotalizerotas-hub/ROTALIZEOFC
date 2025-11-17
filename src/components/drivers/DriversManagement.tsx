@@ -40,7 +40,6 @@ export function DriversManagement() {
   const [creatingDriver, setCreatingDriver] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   
-  // Estados para novo entregador
   const [newDriverData, setNewDriverData] = useState({
     full_name: '',
     email: '',
@@ -48,7 +47,6 @@ export function DriversManagement() {
     password: ''
   })
 
-  // Estado para trocar senha
   const [newPassword, setNewPassword] = useState('')
 
   useEffect(() => {
@@ -63,7 +61,6 @@ export function DriversManagement() {
     try {
       console.log('🔄 [LOAD] Carregando entregadores para usuário:', user.id)
 
-      // Buscar organizações do usuário
       const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
         .select('organization_id')
@@ -86,7 +83,6 @@ export function DriversManagement() {
         return
       }
 
-      // Buscar entregadores das organizações
       const { data: driversData, error: driversError } = await supabase
         .from('delivery_drivers')
         .select(`
@@ -116,7 +112,6 @@ export function DriversManagement() {
         return
       }
 
-      // Buscar perfis dos entregadores
       const userIds = driversData.map(d => d.user_id).filter(Boolean)
       
       const { data: profilesData, error: profilesError } = await supabase
@@ -130,7 +125,6 @@ export function DriversManagement() {
 
       console.log('👤 [LOAD] Perfis encontrados:', profilesData?.length || 0)
 
-      // Combinar dados
       const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
@@ -161,7 +155,6 @@ export function DriversManagement() {
   }
 
   const createNewDriver = async () => {
-    // Validações
     if (!newDriverData.full_name.trim()) {
       toast.error('Nome é obrigatório')
       return
@@ -188,11 +181,9 @@ export function DriversManagement() {
     try {
       console.log('🚀 [CREATE] Iniciando criação...')
       
-      // PASSO 1: Garantir organização
       let organizationId = await ensureOrganization()
       console.log('🏢 [CREATE] Organização ID:', organizationId)
 
-      // PASSO 2: Criar usuário
       console.log('👤 [CREATE] Criando usuário...')
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newDriverData.email.trim(),
@@ -217,11 +208,9 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('✅ [CREATE] Usuário criado:', newUserId)
 
-      // PASSO 3: Aguardar trigger automático e forçar criação do perfil
       console.log('📝 [CREATE] Aguardando trigger e criando perfil...')
       await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Tentar criar perfil manualmente (agora com políticas RLS ajustadas)
       const profileData = {
         id: newUserId,
         email: newDriverData.email.trim(),
@@ -243,7 +232,6 @@ export function DriversManagement() {
         console.log('✅ [CREATE] Perfil criado manualmente')
       }
 
-      // Verificar se perfil existe
       const { data: verifyProfile, error: verifyError } = await supabase
         .from('profiles')
         .select('*')
@@ -256,7 +244,6 @@ export function DriversManagement() {
         console.log('✅ [CREATE] Perfil verificado:', verifyProfile)
       }
 
-      // PASSO 4: Criar entregador
       console.log('🚚 [CREATE] Criando entregador...')
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
@@ -276,7 +263,6 @@ export function DriversManagement() {
 
       console.log('✅ [CREATE] Entregador criado:', driverData.id)
 
-      // PASSO 5: Vincular à organização
       console.log('🔗 [CREATE] Vinculando à organização...')
       const { error: orgError } = await supabase
         .from('user_organizations')
@@ -293,7 +279,6 @@ export function DriversManagement() {
 
       console.log('✅ [CREATE] Vinculado à organização')
 
-      // PASSO 6: Adicionar à lista local com dados REAIS
       const newDriver: DeliveryDriver = {
         id: driverData.id,
         user_id: newUserId,
@@ -311,7 +296,6 @@ export function DriversManagement() {
       setDrivers(prev => [newDriver, ...prev])
       console.log('✅ [CREATE] Adicionado à lista local com dados reais')
 
-      // PASSO 7: Recarregar do servidor para sincronizar
       setTimeout(async () => {
         await loadDrivers()
         console.log('✅ [CREATE] Lista recarregada do servidor')
@@ -336,7 +320,6 @@ export function DriversManagement() {
   const ensureOrganization = async (): Promise<string> => {
     if (!user) throw new Error('Usuário não autenticado')
 
-    // Verificar se já tem organização
     const { data: userOrgs } = await supabase
       .from('user_organizations')
       .select('organization_id')
@@ -347,10 +330,8 @@ export function DriversManagement() {
       return userOrgs[0].organization_id
     }
 
-    // Criar organização
     console.log('🏢 [ORG] Criando organização...')
 
-    // Buscar tipo de estabelecimento
     let { data: establishmentTypes } = await supabase
       .from('establishment_types')
       .select('id')
@@ -372,7 +353,6 @@ export function DriversManagement() {
       establishmentTypeId = newType?.id
     }
 
-    // Criar organização
     const { data: newOrg, error: orgError } = await supabase
       .from('organizations')
       .insert({
@@ -390,7 +370,6 @@ export function DriversManagement() {
       throw new Error(`Erro ao criar organização: ${orgError.message}`)
     }
 
-    // Vincular usuário
     await supabase
       .from('user_organizations')
       .insert({
@@ -429,10 +408,8 @@ export function DriversManagement() {
     if (!confirm('Excluir este entregador?')) return
 
     try {
-      // Remover da lista local primeiro
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
 
-      // Deletar do banco
       await supabase.from('delivery_drivers').delete().eq('id', driverId)
       await supabase.from('user_organizations').delete().eq('user_id', userId).eq('role', 'delivery_driver')
 
@@ -440,7 +417,6 @@ export function DriversManagement() {
     } catch (error) {
       console.error('Erro ao excluir:', error)
       toast.error('Erro ao excluir entregador')
-      // Recarregar em caso de erro
       await loadDrivers()
     }
   }
@@ -467,7 +443,6 @@ export function DriversManagement() {
     try {
       console.log('🔑 [PASSWORD] Alterando senha para usuário:', selectedDriverUserId)
 
-      // Usar Admin API diretamente via RPC
       const { data, error } = await supabase.rpc('change_user_password', {
         target_user_id: selectedDriverUserId,
         new_password: newPassword.trim()
@@ -512,7 +487,6 @@ export function DriversManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -623,7 +597,6 @@ export function DriversManagement() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Estatísticas */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
@@ -665,7 +638,6 @@ export function DriversManagement() {
           </Card>
         </div>
 
-        {/* Lista */}
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
           <CardHeader>
             <CardTitle className="text-xl font-semibold text-gray-800">
@@ -772,7 +744,7 @@ export function DriversManagement() {
                     Cadastre seu primeiro entregador
                   </p>
                   <Button 
-                    onClick={() => setShowNew DriverDialog(true)}
+                    onClick={() => setShowNewDriverDialog(true)}
                     className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                   >
                     <Plus className="w-5 h-5 mr-2" />
@@ -785,7 +757,6 @@ export function DriversManagement() {
         </Card>
       </div>
 
-      {/* Dialog senha */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
