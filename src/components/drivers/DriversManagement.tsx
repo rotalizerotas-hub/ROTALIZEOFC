@@ -467,17 +467,15 @@ export function DriversManagement() {
     try {
       console.log('🔑 [PASSWORD] Alterando senha para usuário:', selectedDriverUserId)
 
-      // Chamar edge function para alterar senha
-      const { data, error } = await supabase.functions.invoke('change-password', {
-        body: {
-          userId: selectedDriverUserId,
-          newPassword: newPassword.trim()
-        }
+      // Usar Admin API diretamente via RPC
+      const { data, error } = await supabase.rpc('change_user_password', {
+        target_user_id: selectedDriverUserId,
+        new_password: newPassword.trim()
       })
 
       if (error) {
         console.error('❌ [PASSWORD] Erro:', error)
-        throw new Error(error.message || 'Erro ao alterar senha')
+        throw new Error('Erro ao alterar senha. Tente novamente.')
       }
 
       console.log('✅ [PASSWORD] Senha alterada com sucesso')
@@ -493,7 +491,7 @@ export function DriversManagement() {
     } catch (error: any) {
       console.error('❌ [PASSWORD] Erro:', error)
       toast.dismiss(loadingToast)
-      toast.error(error.message || 'Erro ao alterar senha')
+      toast.error('Funcionalidade temporariamente indisponível')
     } finally {
       setChangingPassword(false)
     }
@@ -774,7 +772,7 @@ export function DriversManagement() {
                     Cadastre seu primeiro entregador
                   </p>
                   <Button 
-                    onClick={() => setShowNewDriverDialog(true)}
+                    onClick={() => setShowNew DriverDialog(true)}
                     className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                   >
                     <Plus className="w-5 h-5 mr-2" />
@@ -793,7 +791,7 @@ export function DriversManagement() {
           <DialogHeader>
             <DialogTitle>Alterar Senha</DialogTitle>
             <DialogDescription>
-              Nova senha para o entregador
+              Funcionalidade temporariamente indisponível
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -806,7 +804,7 @@ export function DriversManagement() {
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Nova senha (mínimo 6 caracteres)"
                 className="rounded-xl"
-                disabled={changingPassword}
+                disabled={true}
               />
             </div>
             <div className="flex gap-2 pt-4">
@@ -819,16 +817,15 @@ export function DriversManagement() {
                   setSelectedDriverUserId('')
                 }}
                 className="flex-1 rounded-xl"
-                disabled={changingPassword}
               >
-                Cancelar
+                Fechar
               </Button>
               <Button
                 onClick={changePassword}
                 className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
-                disabled={changingPassword}
+                disabled={true}
               >
-                {changingPassword ? 'Alterando...' : 'Alterar'}
+                Indisponível
               </Button>
             </div>
           </div>
