@@ -36,6 +36,7 @@ export function DriversManagement() {
   const [showNewDriverDialog, setShowNewDriverDialog] = useState(false)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string>('')
+  const [creatingDriver, setCreatingDriver] = useState(false)
   
   // Estados para novo entregador
   const [newDriverData, setNewDriverData] = useState({
@@ -106,6 +107,72 @@ export function DriversManagement() {
     }
   }
 
+  const ensureUserHasOrganization = async (): Promise<string> => {
+    if (!user) throw new Error('Usuário não autenticado')
+
+    // Verificar se usuário já tem organização
+    const { data: userOrgs } = await supabase
+      .from('user_organizations')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .limit(1)
+
+    if (userOrgs && userOrgs.length > 0) {
+      return userOrgs[0].organization_id
+    }
+
+    // Se não tem organização, criar uma padrão
+    console.log('Usuário não possui organização, criando organização padrão...')
+
+    // Buscar um tipo de estabelecimento padrão
+    const { data: establishmentTypes } = await supabase
+      .from('establishment_types')
+      .select('id')
+      .limit(1)
+
+    const defaultEstablishmentTypeId = establishmentTypes?.[0]?.id
+
+    if (!defaultEstablishmentTypeId) {
+      throw new Error('Nenhum tipo de estabelecimento encontrado')
+    }
+
+    // Criar organização padrão
+    const { data: newOrg, error: orgError } = await supabase
+      .from('organizations')
+      .insert({
+        name: 'Minha Empresa',
+        address: 'Endereço da empresa',
+        phone: '(31) 99999-9999',
+        establishment_type_id: defaultEstablishmentTypeId,
+        latitude: -18.5122,
+        longitude: -44.5550
+      })
+      .select()
+      .single()
+
+    if (orgError) {
+      console.error('Erro ao criar organização:', orgError)
+      throw new Error('Erro ao criar organização padrão')
+    }
+
+    // Vincular usuário à organização como admin
+    const { error: userOrgError } = await supabase
+      .from('user_organizations')
+      .insert({
+        user_id: user.id,
+        organization_id: newOrg.id,
+        role: 'admin'
+      })
+
+    if (userOrgError) {
+      console.error('Erro ao vincular usuário à organização:', userOrgError)
+      throw new Error('Erro ao vincular usuário à organização')
+    }
+
+    toast.success('Organização padrão criada com sucesso!')
+    return newOrg.id
+  }
+
   const toggleDriverStatus = async (driverId: string, currentStatus: boolean) => {
     try {
       const { error } = await supabase
@@ -137,19 +204,13 @@ export function DriversManagement() {
       return
     }
 
+    setCreatingDriver(true)
+
     try {
-      // Buscar organização do usuário
-      const { data: userOrgs } = await supabase
-        .from('user_organizations')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .limit(1)
+      // Garantir que o usuário tem uma organização
+      const organizationId = await ensureUserHasOrganization()
 
-      if (!userOrgs || userOrgs.length === 0) {
-        throw new Error('Usuário não possui organização')
-      }
-
-      const organizationId = userOrgs[0].organization_id
+      console.log('Criando entregador para organização:', organizationId)
 
       // Criar usuário no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -163,7 +224,12 @@ export function DriversManagement() {
         }
       })
 
-      if (authError) throw authError
+      if (authError) {
+        console.error('Erro ao criar usuário no Auth:', authError)
+        throw new Error('Erro ao criar conta de usuário: ' + authError.message)
+      }
+
+      console.log('Usuário criado no Auth:', authData.user.id)
 
       // Criar perfil do entregador
       const { error: profileError } = await supabase
@@ -175,7 +241,12 @@ export function DriversManagement() {
           phone: newDriverData.phone
         })
 
-      if (profileError) throw profileError
+      if (profileError) {
+        console.error('Erro ao criar perfil:', profileError)
+        throw new Error('Erro ao criar perfil do entregador: ' + profileError.message)
+      }
+
+      console.log('Perfil criado com sucesso')
 
       // Criar registro de entregador
       const { error: driverError } = await supabase
@@ -186,7 +257,12 @@ export function DriversManagement() {
           is_online: false
         })
 
-      if (driverError) throw driverError
+      if (driverError) {
+        console.error('Erro ao criar registro de entregador:', driverError)
+        throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
+      }
+
+      console.log('Registro de entregador criado com sucesso')
 
       // Criar vínculo com organização
       const { error: orgError } = await supabase
@@ -197,15 +273,22 @@ export function DriversManagement() {
           role: 'delivery_driver'
         })
 
-      if (orgError) throw orgError
+      if (orgError) {
+        console.error('Erro ao vincular com organização:', orgError)
+        throw new Error('Erro ao vincular entregador à organização: ' + orgError.message)
+      }
+
+      console.log('Vínculo com organização criado com sucesso')
 
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       loadDrivers()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar entregador:', error)
-      toast.error('Erro ao criar entregador')
+      toast.error(error.message || 'Erro ao criar entregador')
+    } finally {
+      setCreatingDriver(false)
     }
   }
 
@@ -314,6 +397,7 @@ export function DriversManagement() {
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, full_name: e.target.value }))}
                       placeholder="João Silva"
                       className="rounded-xl"
+                      disabled={creatingDriver}
                     />
                   </div>
                   <div>
@@ -325,6 +409,7 @@ export function DriversManagement() {
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="joao@email.com"
                       className="rounded-xl"
+                      disabled={creatingDriver}
                     />
                   </div>
                   <div>
@@ -335,6 +420,7 @@ export function DriversManagement() {
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="(31) 99999-9999"
                       className="rounded-xl"
+                      disabled={creatingDriver}
                     />
                   </div>
                   <div>
@@ -346,6 +432,7 @@ export function DriversManagement() {
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
                       placeholder="Senha de acesso"
                       className="rounded-xl"
+                      disabled={creatingDriver}
                     />
                   </div>
                   <div className="flex gap-2 pt-4">
@@ -353,14 +440,16 @@ export function DriversManagement() {
                       variant="outline"
                       onClick={() => setShowNewDriverDialog(false)}
                       className="flex-1 rounded-xl"
+                      disabled={creatingDriver}
                     >
                       Cancelar
                     </Button>
                     <Button
                       onClick={createNewDriver}
                       className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                      disabled={creatingDriver}
                     >
-                      Cadastrar
+                      {creatingDriver ? 'Criando...' : 'Cadastrar'}
                     </Button>
                   </div>
                 </div>
