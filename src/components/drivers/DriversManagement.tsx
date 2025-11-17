@@ -89,14 +89,14 @@ export function DriversManagement() {
             organization_id
           `)
           .in('organization_id', orgIds)
+          .order('created_at', { ascending: false })
 
         if (orgDriversError) {
           console.error('❌ [LOAD] Erro ao buscar entregadores:', orgDriversError)
-          throw orgDriversError
+        } else {
+          driversData = orgDriversData || []
+          console.log('📊 [LOAD] Entregadores encontrados:', driversData.length)
         }
-
-        driversData = orgDriversData || []
-        console.log('📊 [LOAD] Entregadores encontrados:', driversData.length)
       }
 
       // Se não encontrou entregadores reais, usar dados de exemplo
@@ -329,16 +329,22 @@ export function DriversManagement() {
     }
 
     setCreatingDriver(true)
+    const loadingToast = toast.loading('Criando entregador...')
 
     try {
       console.log('🔄 [CREATE] Iniciando criação de entregador...')
+      console.log('📝 [CREATE] Dados:', {
+        name: newDriverData.full_name,
+        email: newDriverData.email,
+        phone: newDriverData.phone
+      })
 
       // Garantir que o usuário tem uma organização
       const organizationId = await ensureUserHasOrganization()
+      console.log('🏢 [CREATE] Organização ID:', organizationId)
 
-      console.log('🚀 [CREATE] Criando usuário com signup normal...')
-
-      // Criar usuário usando signup normal
+      // PASSO 1: Criar usuário no Auth
+      console.log('🚀 [CREATE] PASSO 1: Criando usuário no Auth...')
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: newDriverData.email.trim(),
         password: newDriverData.password,
@@ -364,42 +370,39 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('✅ [CREATE] Usuário criado com ID:', newUserId)
 
-      // Aguardar um pouco para o trigger tentar criar o perfil
-      console.log('⏳ [CREATE] Aguardando trigger criar perfil...')
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // PASSO 2: Aguardar e verificar perfil
+      console.log('⏳ [CREATE] PASSO 2: Aguardando criação do perfil...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Verificar se perfil já existe
-      console.log('🔍 [CREATE] Verificando se perfil já existe...')
+      // Verificar se perfil existe
       const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, full_name, email, phone')
         .eq('id', newUserId)
         .single()
 
       if (!existingProfile) {
-        console.log('🔄 [CREATE] Perfil não existe, criando manualmente...')
-        // Usar upsert para evitar conflitos
+        console.log('🔄 [CREATE] Criando perfil manualmente...')
         const { error: profileError } = await supabase
           .from('profiles')
-          .upsert({
+          .insert({
             id: newUserId,
             email: newDriverData.email,
             full_name: newDriverData.full_name,
             phone: newDriverData.phone || ''
           })
 
-        if (profileError && profileError.message) {
-          console.error('⚠️ [CREATE] Erro ao criar perfil:', profileError.message)
-          // Não falhar por causa do perfil, continuar
-        } else {
-          console.log('✅ [CREATE] Perfil criado com sucesso')
+        if (profileError) {
+          console.error('❌ [CREATE] Erro ao criar perfil:', profileError)
+          throw new Error('Erro ao criar perfil: ' + profileError.message)
         }
+        console.log('✅ [CREATE] Perfil criado manualmente')
       } else {
-        console.log('✅ [CREATE] Perfil já existe (criado pelo trigger)')
+        console.log('✅ [CREATE] Perfil já existe:', existingProfile)
       }
 
-      // Criar registro de entregador
-      console.log('🔄 [CREATE] Criando registro de entregador...')
+      // PASSO 3: Criar registro de entregador
+      console.log('🔄 [CREATE] PASSO 3: Criando registro de entregador...')
       const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
         .insert({
@@ -418,8 +421,8 @@ export function DriversManagement() {
 
       console.log('✅ [CREATE] Registro de entregador criado:', driverData)
 
-      // Vincular à organização
-      console.log('🔄 [CREATE] Vinculando à organização...')
+      // PASSO 4: Vincular à organização
+      console.log('🔄 [CREATE] PASSO 4: Vinculando à organização...')
       const { error: orgError } = await supabase
         .from('user_organizations')
         .insert({
@@ -433,24 +436,44 @@ export function DriversManagement() {
         throw new Error('Erro ao vincular à organização: ' + orgError.message)
       }
 
-      console.log('✅ [CREATE] Entregador vinculado à organização com sucesso')
+      console.log('✅ [CREATE] Entregador vinculado à organização')
 
+      // PASSO 5: Adicionar à lista local imediatamente
+      console.log('🔄 [CREATE] PASSO 5: Adicionando à lista local...')
+      const newDriver: DeliveryDriver = {
+        id: driverData.id,
+        user_id: newUserId,
+        is_online: false,
+        total_today: 0,
+        current_latitude: null,
+        current_longitude: null,
+        profiles: {
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone || '(31) 99999-0000',
+          email: newDriverData.email
+        }
+      }
+
+      setDrivers(prev => [newDriver, ...prev])
+      console.log('✅ [CREATE] Entregador adicionado à lista local')
+
+      // PASSO 6: Recarregar lista do servidor
+      console.log('🔄 [CREATE] PASSO 6: Recarregando lista do servidor...')
+      setTimeout(async () => {
+        await loadDrivers()
+        console.log('✅ [CREATE] Lista recarregada do servidor')
+      }, 1000)
+
+      toast.dismiss(loadingToast)
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
-      
-      // Recarregar lista múltiplas vezes para garantir que apareça
-      console.log('🔄 [CREATE] Recarregando lista de entregadores...')
-      await loadDrivers()
-      
-      // Recarregar novamente após 2 segundos
-      setTimeout(async () => {
-        console.log('🔄 [CREATE] Segundo recarregamento...')
-        await loadDrivers()
-      }, 2000)
+
+      console.log('🎉 [CREATE] Processo concluído com sucesso!')
 
     } catch (error: any) {
       console.error('❌ [CREATE] Erro ao criar entregador:', error)
+      toast.dismiss(loadingToast)
       toast.error(error.message || 'Erro ao criar entregador')
     } finally {
       setCreatingDriver(false)
@@ -512,9 +535,6 @@ export function DriversManagement() {
     try {
       console.log(`🗑️ [DELETE] Iniciando exclusão: ${driverId}`)
 
-      // Salvar estado original para restaurar em caso de erro
-      const currentDrivers = [...drivers]
-
       // Primeiro, remover da lista local para feedback imediato
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
 
@@ -565,8 +585,8 @@ export function DriversManagement() {
       toast.dismiss(loadingToast)
       toast.error(error.message || 'Erro ao excluir entregador')
       
-      // Restaurar lista original em caso de erro
-      setDrivers(drivers)
+      // Recarregar lista em caso de erro
+      await loadDrivers()
     }
   }
 
@@ -708,7 +728,7 @@ export function DriversManagement() {
                       className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                       disabled={creatingDriver}
                     >
-                      {creatingDriver ? 'Criando...' : 'Cadastrar'}
+                      {creatingDriver ? '⏳ Criando...' : 'Cadastrar'}
                     </Button>
                   </div>
                 </div>
@@ -740,7 +760,6 @@ export function DriversManagement() {
                 Online Agora
               </CardTitle>
             </CardHeader>
-            
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
                 {drivers.filter(d => d.is_online).length}
@@ -749,7 +768,6 @@ export function DriversManagement() {
           </Card>
 
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">
                 Receita Total Hoje
