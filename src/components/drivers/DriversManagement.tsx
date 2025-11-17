@@ -559,8 +559,10 @@ export function DriversManagement() {
     try {
       console.log(`🗑️ Iniciando exclusão do entregador ID: ${driverId}, User ID: ${userId}`)
 
+      // Salvar estado original para restaurar em caso de erro
+      const currentDrivers = [...drivers]
+
       // Primeiro, remover da lista local para feedback imediato
-      const originalDrivers = [...drivers]
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
 
       // Verificar se usuário tem permissão (é admin)
@@ -626,7 +628,7 @@ export function DriversManagement() {
       toast.error(error.message || 'Erro ao excluir entregador')
       
       // Restaurar lista original em caso de erro
-      setDrivers(originalDrivers)
+      setDrivers(drivers)
       
       console.log('🔄 Lista restaurada devido ao erro')
     }
