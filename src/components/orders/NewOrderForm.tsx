@@ -469,30 +469,32 @@ export function NewOrderForm() {
                             : "🏍️ Selecione um motoboy (opcional)"
                       } />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="w-full min-w-[400px] max-w-[600px]">
                       <SelectItem value="">
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4" />
-                          <span>⏰ Atribuir depois</span>
+                        <div className="flex items-center gap-2 w-full">
+                          <Package className="w-4 h-4 flex-shrink-0" />
+                          <span className="whitespace-nowrap">⏰ Atribuir depois</span>
                         </div>
                       </SelectItem>
                       {deliveryDrivers.map((driver) => (
                         <SelectItem key={driver.id} value={driver.id}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-3 h-3 rounded-full ${
+                          <div className="flex items-center gap-2 w-full min-w-0">
+                            <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
                               driver.is_online ? 'bg-green-500' : 'bg-gray-400'
                             }`} />
-                            <Bike className="w-4 h-4" />
-                            <span className="font-medium">{driver.profiles.full_name}</span>
-                            <span className={`text-sm px-2 py-1 rounded-full ${
+                            <Bike className="w-4 h-4 flex-shrink-0" />
+                            <span className="font-medium truncate flex-1 min-w-0">
+                              {driver.profiles.full_name}
+                            </span>
+                            <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
                               driver.is_online 
                                 ? 'bg-green-100 text-green-700' 
                                 : 'bg-gray-100 text-gray-600'
                             }`}>
-                              {driver.is_online ? '🟢 Online' : '🔴 Offline'}
+                              {driver.is_online ? '🟢' : '🔴'}
                             </span>
-                            <span className="text-sm text-green-600 font-medium">
-                              💰 R$ {driver.total_today.toFixed(2)}
+                            <span className="text-xs text-green-600 font-medium flex-shrink-0">
+                              R$ {driver.total_today.toFixed(2)}
                             </span>
                           </div>
                         </SelectItem>
