@@ -357,6 +357,12 @@ export function DriversManagement() {
 
   const toggleDriverStatus = async (driverId: string, currentStatus: boolean) => {
     try {
+      // Verificar se é um ID temporário
+      if (driverId.startsWith('temp-')) {
+        toast.info('Aguarde o entregador ser processado completamente')
+        return
+      }
+
       const { error } = await supabase
         .from('delivery_drivers')
         .update({ 
@@ -365,7 +371,10 @@ export function DriversManagement() {
         })
         .eq('id', driverId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro ao alterar status:', error)
+        throw error
+      }
 
       setDrivers(prev => prev.map(driver => 
         driver.id === driverId 
@@ -384,6 +393,14 @@ export function DriversManagement() {
     if (!confirm('Tem certeza que deseja excluir este entregador?')) return
 
     try {
+      // Verificar se é um ID temporário
+      if (driverId.startsWith('temp-')) {
+        // Remover apenas da lista local
+        setDrivers(prev => prev.filter(driver => driver.id !== driverId))
+        toast.success('Entregador removido da lista')
+        return
+      }
+
       // Deletar registro de entregador
       const { error: driverError } = await supabase
         .from('delivery_drivers')
@@ -663,6 +680,7 @@ export function DriversManagement() {
                       <Switch
                         checked={driver.is_online}
                         onCheckedChange={() => toggleDriverStatus(driver.id, driver.is_online)}
+                        disabled={driver.id.startsWith('temp-')}
                       />
                     </div>
 
@@ -676,6 +694,7 @@ export function DriversManagement() {
                           setShowPasswordDialog(true)
                         }}
                         className="rounded-xl"
+                        disabled={driver.id.startsWith('temp-')}
                       >
                         <Key className="w-4 h-4" />
                       </Button>
@@ -748,6 +767,7 @@ export function DriversManagement() {
               >
                 Cancelar
               </Button>
+              
               <Button
                 onClick={changePassword}
                 className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
