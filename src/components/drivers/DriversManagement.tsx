@@ -36,7 +36,9 @@ export function DriversManagement() {
   const [showNewDriverDialog, setShowNewDriverDialog] = useState(false)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string>('')
+  const [selectedDriverUserId, setSelectedDriverUserId] = useState<string>('')
   const [creatingDriver, setCreatingDriver] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
   
   // Estados para novo entregador
   const [newDriverData, setNewDriverData] = useState({
@@ -215,21 +217,43 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('✅ [CREATE] Usuário criado:', newUserId)
 
-      // PASSO 3: Aguardar trigger automático do perfil
-      console.log('⏳ [CREATE] Aguardando trigger automático do perfil...')
-      await new Promise(resolve => setTimeout(resolve, 3000))
+      // PASSO 3: Aguardar trigger automático e forçar criação do perfil
+      console.log('📝 [CREATE] Aguardando trigger e criando perfil...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
 
-      // Verificar se perfil foi criado pelo trigger
-      const { data: existingProfile } = await supabase
+      // Tentar criar perfil manualmente (agora com políticas RLS ajustadas)
+      const profileData = {
+        id: newUserId,
+        email: newDriverData.email.trim(),
+        full_name: newDriverData.full_name.trim(),
+        phone: newDriverData.phone.trim() || ''
+      }
+
+      console.log('📤 [CREATE] Tentando criar perfil:', profileData)
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert(profileData)
+
+      if (profileError) {
+        console.log('⚠️ [CREATE] Erro ao criar perfil manualmente:', profileError.message)
+        console.log('⏳ [CREATE] Aguardando trigger automático...')
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      } else {
+        console.log('✅ [CREATE] Perfil criado manualmente')
+      }
+
+      // Verificar se perfil existe
+      const { data: verifyProfile, error: verifyError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', newUserId)
         .single()
 
-      if (existingProfile) {
-        console.log('✅ [CREATE] Perfil criado automaticamente pelo trigger:', existingProfile)
+      if (verifyError || !verifyProfile) {
+        console.log('⚠️ [CREATE] Perfil não encontrado, mas continuando...')
       } else {
-        console.log('⚠️ [CREATE] Perfil não foi criado pelo trigger, mas continuando...')
+        console.log('✅ [CREATE] Perfil verificado:', verifyProfile)
       }
 
       // PASSO 4: Criar entregador
@@ -291,7 +315,7 @@ export function DriversManagement() {
       setTimeout(async () => {
         await loadDrivers()
         console.log('✅ [CREATE] Lista recarregada do servidor')
-      }, 2000)
+      }, 3000)
 
       toast.dismiss(loadingToast)
       toast.success('Entregador criado com sucesso!')
@@ -422,10 +446,57 @@ export function DriversManagement() {
   }
 
   const changePassword = async () => {
-    toast.info('Funcionalidade em desenvolvimento')
-    setShowPasswordDialog(false)
-    setNewPassword('')
-    setSelectedDriverId('')
+    if (!newPassword.trim()) {
+      toast.error('Digite uma nova senha')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('Senha deve ter pelo menos 6 caracteres')
+      return
+    }
+
+    if (newPassword.includes(' ')) {
+      toast.error('Senha não pode conter espaços')
+      return
+    }
+
+    setChangingPassword(true)
+    const loadingToast = toast.loading('Alterando senha...')
+
+    try {
+      console.log('🔑 [PASSWORD] Alterando senha para usuário:', selectedDriverUserId)
+
+      // Chamar edge function para alterar senha
+      const { data, error } = await supabase.functions.invoke('change-password', {
+        body: {
+          userId: selectedDriverUserId,
+          newPassword: newPassword.trim()
+        }
+      })
+
+      if (error) {
+        console.error('❌ [PASSWORD] Erro:', error)
+        throw new Error(error.message || 'Erro ao alterar senha')
+      }
+
+      console.log('✅ [PASSWORD] Senha alterada com sucesso')
+      
+      toast.dismiss(loadingToast)
+      toast.success('Senha alterada com sucesso!')
+      
+      setShowPasswordDialog(false)
+      setNewPassword('')
+      setSelectedDriverId('')
+      setSelectedDriverUserId('')
+
+    } catch (error: any) {
+      console.error('❌ [PASSWORD] Erro:', error)
+      toast.dismiss(loadingToast)
+      toast.error(error.message || 'Erro ao alterar senha')
+    } finally {
+      setChangingPassword(false)
+    }
   }
 
   if (loading) {
@@ -673,6 +744,7 @@ export function DriversManagement() {
                         size="sm"
                         onClick={() => {
                           setSelectedDriverId(driver.id)
+                          setSelectedDriverUserId(driver.user_id)
                           setShowPasswordDialog(true)
                         }}
                         className="rounded-xl"
@@ -732,8 +804,9 @@ export function DriversManagement() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nova senha"
+                placeholder="Nova senha (mínimo 6 caracteres)"
                 className="rounded-xl"
+                disabled={changingPassword}
               />
             </div>
             <div className="flex gap-2 pt-4">
@@ -743,16 +816,19 @@ export function DriversManagement() {
                   setShowPasswordDialog(false)
                   setNewPassword('')
                   setSelectedDriverId('')
+                  setSelectedDriverUserId('')
                 }}
                 className="flex-1 rounded-xl"
+                disabled={changingPassword}
               >
                 Cancelar
               </Button>
               <Button
                 onClick={changePassword}
                 className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                disabled={changingPassword}
               >
-                Alterar
+                {changingPassword ? 'Alterando...' : 'Alterar'}
               </Button>
             </div>
           </div>
