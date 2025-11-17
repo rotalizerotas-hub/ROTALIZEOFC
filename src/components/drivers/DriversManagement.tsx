@@ -287,22 +287,38 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('Usuário criado com ID:', newUserId)
 
-      // Criar perfil manualmente (não depender do trigger)
-      console.log('Criando perfil manualmente...')
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id: newUserId,
-          email: newDriverData.email,
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone
-        })
+      // Aguardar um pouco para o trigger tentar criar o perfil
+      console.log('Aguardando trigger criar perfil...')
+      await new Promise(resolve => setTimeout(resolve, 3000))
 
-      if (profileError) {
-        console.error('Erro ao criar perfil:', profileError)
-        // Continuar mesmo se der erro no perfil, pois pode já existir
+      // Verificar se perfil já existe
+      console.log('Verificando se perfil já existe...')
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', newUserId)
+        .single()
+
+      if (!existingProfile) {
+        console.log('Perfil não existe, criando manualmente...')
+        // Usar upsert para evitar conflitos
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: newUserId,
+            email: newDriverData.email,
+            full_name: newDriverData.full_name,
+            phone: newDriverData.phone || ''
+          })
+
+        if (profileError) {
+          console.error('Erro ao criar perfil:', profileError)
+          // Não falhar por causa do perfil, continuar
+        } else {
+          console.log('Perfil criado com sucesso')
+        }
       } else {
-        console.log('Perfil criado com sucesso')
+        console.log('Perfil já existe (criado pelo trigger)')
       }
 
       // Criar registro de entregador
@@ -346,9 +362,11 @@ export function DriversManagement() {
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Recarregar lista imediatamente
-      console.log('Recarregando lista de entregadores...')
-      await loadDrivers()
+      // Aguardar um pouco mais e recarregar lista
+      console.log('Aguardando e recarregando lista de entregadores...')
+      setTimeout(async () => {
+        await loadDrivers()
+      }, 2000)
 
     } catch (error: any) {
       console.error('Erro ao criar entregador:', error)
