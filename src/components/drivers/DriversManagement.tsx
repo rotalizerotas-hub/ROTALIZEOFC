@@ -287,12 +287,27 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('Usuário criado com ID:', newUserId)
 
-      // Aguardar um pouco para o trigger criar o perfil
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Criar perfil manualmente (não depender do trigger)
+      console.log('Criando perfil manualmente...')
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: newUserId,
+          email: newDriverData.email,
+          full_name: newDriverData.full_name,
+          phone: newDriverData.phone
+        })
+
+      if (profileError) {
+        console.error('Erro ao criar perfil:', profileError)
+        // Continuar mesmo se der erro no perfil, pois pode já existir
+      } else {
+        console.log('Perfil criado com sucesso')
+      }
 
       // Criar registro de entregador
       console.log('Criando registro de entregador...')
-      const { error: driverError } = await supabase
+      const { data: driverData, error: driverError } = await supabase
         .from('delivery_drivers')
         .insert({
           user_id: newUserId,
@@ -300,11 +315,15 @@ export function DriversManagement() {
           is_online: false,
           total_today: 0
         })
+        .select()
+        .single()
 
       if (driverError) {
         console.error('Erro ao criar registro de entregador:', driverError)
         throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
       }
+
+      console.log('Registro de entregador criado:', driverData)
 
       // Vincular à organização
       console.log('Vinculando à organização...')
@@ -321,31 +340,15 @@ export function DriversManagement() {
         throw new Error('Erro ao vincular à organização: ' + orgError.message)
       }
 
-      // Adicionar entregador à lista imediatamente
-      const newDriver: DeliveryDriver = {
-        id: `temp-${Date.now()}`, // ID temporário
-        user_id: newUserId,
-        is_online: false,
-        total_today: 0,
-        current_latitude: null,
-        current_longitude: null,
-        profiles: {
-          full_name: newDriverData.full_name,
-          phone: newDriverData.phone,
-          email: newDriverData.email
-        }
-      }
-
-      setDrivers(prev => [...prev, newDriver])
+      console.log('Entregador vinculado à organização com sucesso')
 
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Recarregar lista após um tempo para pegar dados reais
-      setTimeout(async () => {
-        await loadDrivers()
-      }, 3000)
+      // Recarregar lista imediatamente
+      console.log('Recarregando lista de entregadores...')
+      await loadDrivers()
 
     } catch (error: any) {
       console.error('Erro ao criar entregador:', error)
