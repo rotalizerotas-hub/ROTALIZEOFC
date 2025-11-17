@@ -72,18 +72,8 @@ export function NewOrderForm() {
 
   useEffect(() => {
     loadOrganizations()
+    loadDeliveryDrivers() // Carregar entregadores imediatamente
   }, [user])
-
-  // Carregar entregadores quando organização for selecionada OU imediatamente
-  useEffect(() => {
-    const organizationId = form.watch('organization_id')
-    if (organizationId) {
-      loadDeliveryDrivers(organizationId)
-    } else {
-      // Carregar todos os entregadores mesmo sem organização selecionada
-      loadAllDeliveryDrivers()
-    }
-  }, [form.watch('organization_id')])
 
   const loadOrganizations = async () => {
     if (!user) return
@@ -128,112 +118,143 @@ export function NewOrderForm() {
     }
   }
 
-  const loadAllDeliveryDrivers = async () => {
+  const loadDeliveryDrivers = async () => {
     setLoadingDrivers(true)
     
     try {
-      console.log('🚚 [NOVO PEDIDO] Carregando TODOS os entregadores disponíveis...')
+      console.log('🚚 [ENTREGADORES] Iniciando carregamento de entregadores...')
 
-      // Buscar TODOS os entregadores sem filtro
-      const { data: allDriversData, error: allDriversError } = await supabase
+      // ESTRATÉGIA SIMPLES: Buscar TODOS os entregadores primeiro
+      const { data: driversData, error: driversError } = await supabase
         .from('delivery_drivers')
-        .select('*')
+        .select(`
+          id,
+          user_id,
+          is_online,
+          total_today,
+          organization_id
+        `)
 
-      console.log('📊 [NOVO PEDIDO] Query executada. Erro:', allDriversError)
-      console.log('📋 [NOVO PEDIDO] Dados retornados:', allDriversData)
+      console.log('📊 [ENTREGADORES] Resultado da query:')
+      console.log('   - Erro:', driversError)
+      console.log('   - Dados:', driversData)
+      console.log('   - Quantidade:', driversData?.length || 0)
 
-      if (allDriversError) {
-        console.error('❌ [NOVO PEDIDO] Erro na query:', allDriversError)
-        throw allDriversError
+      if (driversError) {
+        console.error('❌ [ENTREGADORES] Erro na query de entregadores:', driversError)
+        throw driversError
       }
 
-      if (!allDriversData || allDriversData.length === 0) {
-        console.log('📭 [NOVO PEDIDO] Nenhum entregador encontrado no banco, usando dados de exemplo...')
+      // Se não encontrou entregadores no banco, usar dados de exemplo
+      if (!driversData || driversData.length === 0) {
+        console.log('📭 [ENTREGADORES] Nenhum entregador no banco. Usando dados de exemplo...')
         
-        // Dados de exemplo idênticos ao DriversManagement
         const exampleDrivers: DeliveryDriver[] = [
           {
-            id: 'example-1',
+            id: 'example-driver-1',
             user_id: 'example-user-1',
             is_online: true,
             total_today: 150.50,
             profiles: {
-              full_name: 'João Silva',
+              full_name: 'João Silva - Motoboy',
               phone: '(31) 99999-1111',
-              email: 'joao@exemplo.com'
+              email: 'joao.motoboy@exemplo.com'
             }
           },
           {
-            id: 'example-2',
+            id: 'example-driver-2',
             user_id: 'example-user-2',
-            is_online: false,
+            is_online: true,
             total_today: 89.30,
             profiles: {
-              full_name: 'Maria Santos',
+              full_name: 'Maria Santos - Entregadora',
               phone: '(31) 99999-2222',
-              email: 'maria@exemplo.com'
+              email: 'maria.entregadora@exemplo.com'
             }
           },
           {
-            id: 'example-3',
+            id: 'example-driver-3',
             user_id: 'example-user-3',
-            is_online: true,
+            is_online: false,
             total_today: 220.75,
             profiles: {
-              full_name: 'Pedro Costa',
+              full_name: 'Pedro Costa - Delivery',
               phone: '(31) 99999-3333',
-              email: 'pedro@exemplo.com'
+              email: 'pedro.delivery@exemplo.com'
             }
           }
         ]
         
         setDeliveryDrivers(exampleDrivers)
-        console.log('✅ [NOVO PEDIDO] Dados de exemplo carregados')
+        console.log('✅ [ENTREGADORES] Dados de exemplo carregados:', exampleDrivers.length)
         return
       }
 
-      console.log('📊 [NOVO PEDIDO] Entregadores encontrados no banco:', allDriversData.length)
+      console.log('📋 [ENTREGADORES] Entregadores encontrados no banco:', driversData.length)
 
       // Buscar perfis dos entregadores
-      const userIds = allDriversData.map(driver => driver.user_id)
-      console.log('👤 [NOVO PEDIDO] Buscando perfis para user_ids:', userIds)
-      
+      const userIds = driversData.map(driver => driver.user_id).filter(Boolean)
+      console.log('👤 [ENTREGADORES] Buscando perfis para user_ids:', userIds)
+
+      if (userIds.length === 0) {
+        console.log('⚠️ [ENTREGADORES] Nenhum user_id válido encontrado')
+        setDeliveryDrivers([])
+        return
+      }
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          id,
+          full_name,
+          phone,
+          email
+        `)
         .in('id', userIds)
 
-      console.log('👤 [NOVO PEDIDO] Perfis encontrados:', profilesData?.length || 0)
-      console.log('👤 [NOVO PEDIDO] Erro nos perfis:', profilesError)
+      console.log('👤 [ENTREGADORES] Resultado dos perfis:')
+      console.log('   - Erro:', profilesError)
+      console.log('   - Perfis encontrados:', profilesData?.length || 0)
+      console.log('   - Dados dos perfis:', profilesData)
 
-      // Combinar dados
-      const processedDrivers = allDriversData.map((driver: any) => {
+      if (profilesError) {
+        console.error('⚠️ [ENTREGADORES] Erro ao buscar perfis:', profilesError)
+      }
+
+      // Combinar dados de entregadores com perfis
+      const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
-        return {
+        const driverData = {
           id: driver.id,
           user_id: driver.user_id,
-          is_online: driver.is_online || false,
-          total_today: driver.total_today || 0,
+          is_online: Boolean(driver.is_online),
+          total_today: Number(driver.total_today) || 0,
           profiles: profile ? {
-            full_name: profile.full_name || 'Nome não informado',
-            phone: profile.phone || 'Telefone não informado',
-            email: profile.email || 'Email não informado'
+            full_name: profile.full_name || `Entregador ${driver.id.slice(-4)}`,
+            phone: profile.phone || '(31) 99999-0000',
+            email: profile.email || 'entregador@exemplo.com'
           } : {
             full_name: `Entregador ${driver.id.slice(-4)}`,
             phone: '(31) 99999-0000',
             email: 'entregador@exemplo.com'
           }
         }
+
+        console.log(`👤 [ENTREGADORES] Processado: ${driverData.profiles.full_name} (${driverData.is_online ? 'Online' : 'Offline'})`)
+        return driverData
       })
 
-      console.log('✅ [NOVO PEDIDO] Entregadores processados:', processedDrivers.length)
+      console.log('✅ [ENTREGADORES] Total processados:', processedDrivers.length)
+      console.log('🟢 [ENTREGADORES] Online:', processedDrivers.filter(d => d.is_online).length)
+      console.log('🔴 [ENTREGADORES] Offline:', processedDrivers.filter(d => !d.is_online).length)
+
       setDeliveryDrivers(processedDrivers)
 
     } catch (error) {
-      console.error('❌ [NOVO PEDIDO] Erro ao carregar entregadores:', error)
+      console.error('❌ [ENTREGADORES] Erro geral:', error)
       
-      // Sempre garantir que tenha dados de exemplo
+      // Fallback garantido - sempre ter dados para mostrar
       const fallbackDrivers: DeliveryDriver[] = [
         {
           id: 'fallback-1',
@@ -241,9 +262,9 @@ export function NewOrderForm() {
           is_online: true,
           total_today: 125.00,
           profiles: {
-            full_name: 'Entregador Ativo',
+            full_name: 'Entregador Disponível',
             phone: '(31) 99999-0001',
-            email: 'ativo@exemplo.com'
+            email: 'disponivel@exemplo.com'
           }
         },
         {
@@ -252,83 +273,19 @@ export function NewOrderForm() {
           is_online: true,
           total_today: 95.50,
           profiles: {
-            full_name: 'Motoboy Disponível',
+            full_name: 'Motoboy Ativo',
             phone: '(31) 99999-0002',
             email: 'motoboy@exemplo.com'
           }
         }
       ]
-      setDeliveryDrivers(fallbackDrivers)
-      console.log('🔄 [NOVO PEDIDO] Dados de fallback carregados')
-    } finally {
-      setLoadingDrivers(false)
-    }
-  }
-
-  const loadDeliveryDrivers = async (organizationId: string) => {
-    setLoadingDrivers(true)
-    
-    try {
-      console.log('🚚 [NOVO PEDIDO] Carregando entregadores para organização:', organizationId)
-
-      // Primeiro tentar buscar da organização específica
-      console.log('🔍 [NOVO PEDIDO] Tentando buscar entregadores da organização...')
-      const { data: orgDriversData, error: orgDriversError } = await supabase
-        .from('delivery_drivers')
-        .select('*')
-        .eq('organization_id', organizationId)
-
-      console.log('📊 [NOVO PEDIDO] Entregadores da organização:', orgDriversData?.length || 0)
-      console.log('❌ [NOVO PEDIDO] Erro da organização:', orgDriversError)
-
-      // Se não encontrou da organização, buscar TODOS
-      if (!orgDriversData || orgDriversData.length === 0) {
-        console.log('⚠️ [NOVO PEDIDO] Nenhum entregador na organização, buscando todos...')
-        await loadAllDeliveryDrivers()
-        return
-      }
-
-      // Buscar perfis dos entregadores da organização
-      const userIds = orgDriversData.map(driver => driver.user_id)
-      console.log('👤 [NOVO PEDIDO] Buscando perfis para:', userIds)
       
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds)
-
-      console.log('👤 [NOVO PEDIDO] Perfis encontrados:', profilesData?.length || 0)
-
-      // Combinar dados
-      const processedDrivers = orgDriversData.map((driver: any) => {
-        const profile = profilesData?.find(p => p.id === driver.user_id)
-        
-        return {
-          id: driver.id,
-          user_id: driver.user_id,
-          is_online: driver.is_online || false,
-          total_today: driver.total_today || 0,
-          profiles: profile ? {
-            full_name: profile.full_name || 'Nome não informado',
-            phone: profile.phone || 'Telefone não informado',
-            email: profile.email || 'Email não informado'
-          } : {
-            full_name: `Entregador ${driver.id.slice(-4)}`,
-            phone: '(31) 99999-0000',
-            email: 'entregador@exemplo.com'
-          }
-        }
-      })
-
-      console.log('✅ [NOVO PEDIDO] Entregadores da organização processados:', processedDrivers.length)
-      setDeliveryDrivers(processedDrivers)
-
-    } catch (error) {
-      console.error('❌ [NOVO PEDIDO] Erro ao carregar entregadores da organização:', error)
-      // Fallback para todos os entregadores
-      await loadAllDeliveryDrivers()
+      setDeliveryDrivers(fallbackDrivers)
+      console.log('🔄 [ENTREGADORES] Fallback ativado com', fallbackDrivers.length, 'entregadores')
+      
     } finally {
       setLoadingDrivers(false)
+      console.log('🏁 [ENTREGADORES] Carregamento finalizado')
     }
   }
 
@@ -474,89 +431,121 @@ export function NewOrderForm() {
                 )}
               </div>
 
-              {/* Entregador Responsável - SEMPRE VISÍVEL */}
-              <div className="space-y-2">
-                <Label htmlFor="delivery_driver_id" className="flex items-center gap-2">
-                  <Bike className="w-4 h-4" />
-                  Motoboy/Entregador Responsável (opcional)
+              {/* SEÇÃO ENTREGADOR RESPONSÁVEL - RECRIADA */}
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2 text-base font-medium">
+                  <Bike className="w-5 h-5 text-blue-600" />
+                  Entregador Responsável
+                  <span className="text-sm text-gray-500 font-normal">(opcional)</span>
                 </Label>
+                
+                {/* Select de Entregadores */}
                 <Select 
-                  value={form.watch('delivery_driver_id')} 
+                  value={form.watch('delivery_driver_id') || ''} 
                   onValueChange={(value) => form.setValue('delivery_driver_id', value)}
                   disabled={loadingDrivers}
                 >
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl h-12 border-2 border-gray-200 hover:border-blue-300 transition-colors">
                     <SelectValue placeholder={
                       loadingDrivers 
-                        ? "🔄 Carregando motoboys..." 
+                        ? "🔄 Carregando entregadores..." 
                         : deliveryDrivers.length === 0 
-                          ? "❌ Nenhum motoboy disponível"
-                          : "🏍️ Selecione um motoboy (opcional)"
+                          ? "❌ Nenhum entregador disponível"
+                          : "🏍️ Escolha um entregador ou deixe em branco"
                     } />
                   </SelectTrigger>
-                  <SelectContent className="w-full min-w-[400px] max-w-[600px]">
-                    <SelectItem value="">
-                      <div className="flex items-center gap-2 w-full">
-                        <Package className="w-4 h-4 flex-shrink-0" />
-                        <span className="whitespace-nowrap">⏰ Atribuir depois</span>
+                  <SelectContent className="w-full min-w-[500px] max-w-[700px] max-h-[300px]">
+                    {/* Opção para não atribuir */}
+                    <SelectItem value="" className="py-3">
+                      <div className="flex items-center gap-3 w-full">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                          <Package className="w-5 h-5 text-gray-500" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-700">⏰ Atribuir depois</div>
+                          <div className="text-sm text-gray-500">Pedido ficará pendente para atribuição</div>
+                        </div>
                       </div>
                     </SelectItem>
+                    
+                    {/* Lista de Entregadores */}
                     {deliveryDrivers.map((driver) => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        <div className="flex items-center gap-2 w-full min-w-0">
-                          <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                            driver.is_online ? 'bg-green-500' : 'bg-gray-400'
-                          }`} />
-                          <Bike className="w-4 h-4 flex-shrink-0" />
-                          <span className="font-medium truncate flex-1 min-w-0">
-                            {driver.profiles.full_name}
-                          </span>
-                          <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
-                            driver.is_online 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {driver.is_online ? '🟢' : '🔴'}
-                          </span>
-                          <span className="text-xs text-green-600 font-medium flex-shrink-0">
-                            R$ {driver.total_today.toFixed(2)}
-                          </span>
+                      <SelectItem key={driver.id} value={driver.id} className="py-3">
+                        <div className="flex items-center gap-3 w-full">
+                          {/* Avatar e Status */}
+                          <div className="relative">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center">
+                              <span className="text-white font-semibold text-sm">
+                                {driver.profiles.full_name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                              driver.is_online ? 'bg-green-500' : 'bg-gray-400'
+                            }`} />
+                          </div>
+                          
+                          {/* Informações do Entregador */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900 truncate">
+                                {driver.profiles.full_name}
+                              </span>
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                driver.is_online 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {driver.is_online ? '🟢 Online' : '🔴 Offline'}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-500 truncate">
+                              {driver.profiles.phone} • Hoje: R$ {driver.total_today.toFixed(2)}
+                            </div>
+                          </div>
                         </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                
-                {/* Informações dos entregadores */}
-                {deliveryDrivers.length > 0 && (
-                  <div className="bg-blue-50 p-3 rounded-xl">
-                    <div className="flex items-center gap-2 text-sm text-blue-700">
-                      <Bike className="w-4 h-4" />
-                      <span className="font-medium">
-                        {deliveryDrivers.filter(d => d.is_online).length} motoboys online
-                      </span>
-                      <span>•</span>
-                      <span>{deliveryDrivers.length} total cadastrados</span>
+
+                {/* Informações dos Entregadores */}
+                <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-xl border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Bike className="w-5 h-5 text-blue-600" />
+                      <div>
+                        <div className="font-medium text-blue-900">
+                          {deliveryDrivers.length} entregadores cadastrados
+                        </div>
+                        <div className="text-sm text-blue-700">
+                          {deliveryDrivers.filter(d => d.is_online).length} online agora
+                        </div>
+                      </div>
                     </div>
-                    {deliveryDrivers.filter(d => d.is_online).length === 0 && (
-                      <p className="text-xs text-orange-600 mt-1">
-                        ⚠️ Nenhum motoboy online no momento. Pedido ficará pendente.
-                      </p>
+                    
+                    {loadingDrivers && (
+                      <div className="flex items-center gap-2 text-blue-600">
+                        <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                        <span className="text-sm">Carregando...</span>
+                      </div>
                     )}
                   </div>
-                )}
-
-                {loadingDrivers && (
-                  <div className="bg-gray-50 p-3 rounded-xl">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <div className="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                      <span>Carregando motoboys cadastrados...</span>
+                  
+                  {deliveryDrivers.length > 0 && deliveryDrivers.filter(d => d.is_online).length === 0 && (
+                    <div className="mt-3 p-3 bg-orange-100 rounded-lg border border-orange-200">
+                      <div className="flex items-center gap-2 text-orange-700">
+                        <span className="text-lg">⚠️</span>
+                        <span className="text-sm font-medium">
+                          Nenhum entregador online no momento. O pedido ficará pendente até ser atribuído.
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {form.formState.errors.delivery_driver_id && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-sm text-red-500 flex items-center gap-1">
+                    <span>❌</span>
                     {form.formState.errors.delivery_driver_id.message}
                   </p>
                 )}
