@@ -57,65 +57,52 @@ export function DriversManagement() {
     if (!user) return
 
     try {
-      console.log('🚚 Carregando entregadores...')
+      console.log('🚚 [LOAD] Carregando entregadores...')
 
-      // Buscar TODOS os entregadores primeiro (sem filtro de organização)
-      console.log('📋 Buscando todos os entregadores disponíveis...')
-      const { data: allDriversData, error: allDriversError } = await supabase
-        .from('delivery_drivers')
-        .select('*')
-
-      if (allDriversError) {
-        console.error('❌ Erro ao buscar todos os entregadores:', allDriversError)
-      } else {
-        console.log('📊 Total de entregadores no sistema:', allDriversData?.length || 0)
-        console.log('📋 Dados de todos os entregadores:', allDriversData)
-      }
-
-      // Buscar organizações do usuário
-      console.log('🏢 Buscando organizações do usuário...')
+      // Buscar organizações do usuário primeiro
       const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
         .select('organization_id, role')
         .eq('user_id', user.id)
 
       if (userOrgsError) {
-        console.error('❌ Erro ao buscar organizações:', userOrgsError)
+        console.error('❌ [LOAD] Erro ao buscar organizações:', userOrgsError)
       }
 
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
-      console.log('🏢 Organizações do usuário:', orgIds)
-      console.log('👤 Roles do usuário:', userOrgs?.map(uo => uo.role))
+      console.log('🏢 [LOAD] Organizações do usuário:', orgIds)
 
-      // Buscar entregadores (com fallback para todos se não tiver organização)
+      // Buscar entregadores das organizações do usuário
       let driversData = []
       
       if (orgIds.length > 0) {
-        console.log('🔍 Buscando entregadores da organização...')
+        console.log('🔍 [LOAD] Buscando entregadores das organizações...')
         const { data: orgDriversData, error: orgDriversError } = await supabase
           .from('delivery_drivers')
-          .select('*')
+          .select(`
+            id,
+            user_id,
+            is_online,
+            total_today,
+            current_latitude,
+            current_longitude,
+            organization_id
+          `)
           .in('organization_id', orgIds)
 
         if (orgDriversError) {
-          console.error('❌ Erro ao buscar entregadores da organização:', orgDriversError)
-          // Fallback para todos os entregadores
-          driversData = allDriversData || []
-        } else {
-          driversData = orgDriversData || []
+          console.error('❌ [LOAD] Erro ao buscar entregadores:', orgDriversError)
+          throw orgDriversError
         }
-      } else {
-        console.log('⚠️ Usuário sem organização, mostrando todos os entregadores')
-        driversData = allDriversData || []
+
+        driversData = orgDriversData || []
+        console.log('📊 [LOAD] Entregadores encontrados:', driversData.length)
       }
 
-      console.log('📊 Entregadores encontrados:', driversData?.length || 0)
-      console.log('📋 Dados dos entregadores:', driversData)
-
+      // Se não encontrou entregadores reais, usar dados de exemplo
       if (!driversData || driversData.length === 0) {
-        console.log('📭 Nenhum entregador encontrado, criando dados de exemplo...')
+        console.log('📭 [LOAD] Nenhum entregador real encontrado, usando dados de exemplo...')
         
-        // Criar entregadores de exemplo se não houver nenhum
         const exampleDrivers: DeliveryDriver[] = [
           {
             id: 'example-1',
@@ -125,7 +112,7 @@ export function DriversManagement() {
             current_latitude: -19.9167,
             current_longitude: -43.9345,
             profiles: {
-              full_name: 'João Silva',
+              full_name: 'João Silva - Exemplo',
               phone: '(31) 99999-1111',
               email: 'joao@exemplo.com'
             }
@@ -138,63 +125,61 @@ export function DriversManagement() {
             current_latitude: null,
             current_longitude: null,
             profiles: {
-              full_name: 'Maria Santos',
+              full_name: 'Maria Santos - Exemplo',
               phone: '(31) 99999-2222',
               email: 'maria@exemplo.com'
-            }
-          },
-          {
-            id: 'example-3',
-            user_id: 'example-user-3',
-            is_online: true,
-            total_today: 220.75,
-            current_latitude: -19.9208,
-            current_longitude: -43.9378,
-            profiles: {
-              full_name: 'Pedro Costa',
-              phone: '(31) 99999-3333',
-              email: 'pedro@exemplo.com'
             }
           }
         ]
         
         setDrivers(exampleDrivers)
         setLoading(false)
-        console.log('✅ Dados de exemplo carregados')
+        console.log('✅ [LOAD] Dados de exemplo carregados')
         return
       }
 
-      // Buscar perfis dos entregadores
-      console.log('👤 Buscando perfis dos entregadores...')
-      const userIds = driversData.map(driver => driver.user_id)
+      // Buscar perfis dos entregadores reais
+      console.log('👤 [LOAD] Buscando perfis dos entregadores...')
+      const userIds = driversData.map(driver => driver.user_id).filter(Boolean)
       
+      if (userIds.length === 0) {
+        console.log('⚠️ [LOAD] Nenhum user_id válido encontrado')
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          id,
+          full_name,
+          phone,
+          email
+        `)
         .in('id', userIds)
 
       if (profilesError) {
-        console.error('❌ Erro ao buscar perfis:', profilesError)
+        console.error('⚠️ [LOAD] Erro ao buscar perfis:', profilesError)
       }
 
-      console.log('👤 Perfis encontrados:', profilesData?.length || 0)
-      console.log('📋 Dados dos perfis:', profilesData)
+      console.log('👤 [LOAD] Perfis encontrados:', profilesData?.length || 0)
 
-      // Combinar dados
-      const processedDrivers = driversData.map((driver: any) => {
+      // Combinar dados de entregadores com perfis
+      const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
         return {
           id: driver.id,
           user_id: driver.user_id,
-          is_online: driver.is_online || false,
-          total_today: driver.total_today || 0,
+          is_online: Boolean(driver.is_online),
+          total_today: Number(driver.total_today) || 0,
           current_latitude: driver.current_latitude,
           current_longitude: driver.current_longitude,
           profiles: profile ? {
-            full_name: profile.full_name || 'Nome não informado',
-            phone: profile.phone || 'Telefone não informado',
-            email: profile.email || 'Email não informado'
+            full_name: profile.full_name || `Entregador ${driver.id.slice(-4)}`,
+            phone: profile.phone || '(31) 99999-0000',
+            email: profile.email || 'entregador@exemplo.com'
           } : {
             full_name: `Entregador ${driver.id.slice(-4)}`,
             phone: '(31) 99999-0000',
@@ -203,17 +188,14 @@ export function DriversManagement() {
         }
       })
 
-      console.log('✅ Entregadores processados:', processedDrivers.length)
-      console.log('📋 Dados finais:', processedDrivers)
-      
+      console.log('✅ [LOAD] Entregadores processados:', processedDrivers.length)
       setDrivers(processedDrivers)
 
     } catch (error) {
-      console.error('❌ Erro ao carregar entregadores:', error)
+      console.error('❌ [LOAD] Erro ao carregar entregadores:', error)
       toast.error('Erro ao carregar entregadores')
       
-      // Fallback para dados de exemplo em caso de erro
-      console.log('🔄 Carregando dados de exemplo como fallback...')
+      // Fallback para dados de exemplo
       const fallbackDrivers: DeliveryDriver[] = [
         {
           id: 'fallback-1',
@@ -223,7 +205,7 @@ export function DriversManagement() {
           current_latitude: -19.9167,
           current_longitude: -43.9345,
           profiles: {
-            full_name: 'Entregador Ativo',
+            full_name: 'Entregador Ativo - Fallback',
             phone: '(31) 99999-0001',
             email: 'ativo@exemplo.com'
           }
@@ -238,7 +220,7 @@ export function DriversManagement() {
   const ensureUserHasOrganization = async (): Promise<string> => {
     if (!user) throw new Error('Usuário não autenticado')
 
-    console.log('Verificando organizações do usuário...')
+    console.log('🏢 [ORG] Verificando organizações do usuário...')
 
     // Verificar se usuário já tem organização
     const { data: userOrgs, error: userOrgsError } = await supabase
@@ -248,16 +230,16 @@ export function DriversManagement() {
       .limit(1)
 
     if (userOrgsError) {
-      console.error('Erro ao buscar organizações:', userOrgsError)
+      console.error('❌ [ORG] Erro ao buscar organizações:', userOrgsError)
       throw new Error('Erro ao verificar organizações do usuário')
     }
 
     if (userOrgs && userOrgs.length > 0) {
-      console.log('Organização encontrada:', userOrgs[0].organization_id)
+      console.log('✅ [ORG] Organização encontrada:', userOrgs[0].organization_id)
       return userOrgs[0].organization_id
     }
 
-    console.log('Usuário não possui organização. Criando organização padrão...')
+    console.log('🔄 [ORG] Criando organização padrão...')
 
     try {
       // Buscar um tipo de estabelecimento padrão
@@ -266,17 +248,11 @@ export function DriversManagement() {
         .select('id, name')
         .limit(1)
 
-      if (etError) {
-        console.error('Erro ao buscar tipos de estabelecimento:', etError)
-        throw new Error(`Erro ao buscar tipos de estabelecimento: ${etError.message}`)
-      }
-
       let establishmentTypeId = establishmentTypes?.[0]?.id
 
       if (!establishmentTypeId) {
-        console.log('Nenhum tipo de estabelecimento encontrado. Criando tipo padrão...')
+        console.log('🔄 [ORG] Criando tipo de estabelecimento padrão...')
         
-        // Criar tipo de estabelecimento padrão
         const { data: newType, error: newTypeError } = await supabase
           .from('establishment_types')
           .insert({
@@ -288,48 +264,31 @@ export function DriversManagement() {
           .single()
 
         if (newTypeError) {
-          console.error('Erro ao criar tipo de estabelecimento:', newTypeError)
+          console.error('❌ [ORG] Erro ao criar tipo de estabelecimento:', newTypeError)
           throw new Error(`Erro ao criar tipo de estabelecimento: ${newTypeError.message}`)
         }
 
-        if (!newType) {
-          throw new Error('Tipo de estabelecimento não foi criado')
-        }
-
         establishmentTypeId = newType.id
-        console.log('Tipo de estabelecimento criado:', establishmentTypeId)
       }
-
-      console.log('Usando tipo de estabelecimento:', establishmentTypeId)
 
       // Criar organização padrão
-      const orgData = {
-        name: 'Minha Empresa',
-        address: 'Endereço da empresa',
-        phone: '(31) 99999-9999',
-        establishment_type_id: establishmentTypeId,
-        latitude: -18.5122,
-        longitude: -44.5550
-      }
-
-      console.log('Criando organização com dados:', orgData)
-
       const { data: newOrg, error: orgError } = await supabase
         .from('organizations')
-        .insert(orgData)
+        .insert({
+          name: 'Minha Empresa',
+          address: 'Endereço da empresa',
+          phone: '(31) 99999-9999',
+          establishment_type_id: establishmentTypeId,
+          latitude: -18.5122,
+          longitude: -44.5550
+        })
         .select()
         .single()
 
       if (orgError) {
-        console.error('Erro detalhado ao criar organização:', orgError)
+        console.error('❌ [ORG] Erro ao criar organização:', orgError)
         throw new Error(`Erro ao criar organização: ${orgError.message}`)
       }
-
-      if (!newOrg) {
-        throw new Error('Organização não foi criada - resposta vazia')
-      }
-
-      console.log('Organização criada com sucesso:', newOrg.id)
 
       // Vincular usuário à organização como admin
       const { error: userOrgError } = await supabase
@@ -341,146 +300,82 @@ export function DriversManagement() {
         })
 
       if (userOrgError) {
-        console.error('Erro ao vincular usuário à organização:', userOrgError)
-        // Tentar limpar a organização criada
+        console.error('❌ [ORG] Erro ao vincular usuário:', userOrgError)
         await supabase.from('organizations').delete().eq('id', newOrg.id)
         throw new Error(`Erro ao vincular usuário à organização: ${userOrgError.message}`)
       }
 
-      console.log('Usuário vinculado à organização como admin')
+      console.log('✅ [ORG] Organização criada:', newOrg.id)
       toast.success('Organização padrão criada com sucesso!')
       return newOrg.id
 
     } catch (error: any) {
-      console.error('Erro no processo de criação de organização:', error)
+      console.error('❌ [ORG] Erro no processo:', error)
       throw new Error(error.message || 'Erro ao criar organização padrão')
     }
   }
 
   const createNewDriver = async () => {
-    // VALIDAÇÕES MÍNIMAS - apenas campos obrigatórios
+    // Validações básicas
     if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
       toast.error('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    // Validar apenas espaços na senha
+    if (newDriverData.password.includes(' ')) {
+      toast.error('A senha não pode conter espaços')
       return
     }
 
     setCreatingDriver(true)
 
     try {
+      console.log('🔄 [CREATE] Iniciando criação de entregador...')
+
       // Garantir que o usuário tem uma organização
       const organizationId = await ensureUserHasOrganization()
 
-      console.log('Criando usuário com email:', newDriverData.email)
+      console.log('🚀 [CREATE] Usando Edge Function para criar entregador...')
 
-      // Criar usuário usando signup normal - SEM VALIDAÇÕES EXTRAS
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newDriverData.email.trim(),
-        password: newDriverData.password,
-        options: {
-          data: {
+      // Usar Edge Function para criar entregador (bypass validações do Supabase)
+      const { data: result, error: functionError } = await supabase.functions.invoke('create-driver', {
+        body: {
+          driverData: {
             full_name: newDriverData.full_name,
+            email: newDriverData.email.trim(),
             phone: newDriverData.phone,
-            role: 'delivery_driver'
+            password: newDriverData.password
           },
-          emailRedirectTo: undefined
+          organizationId: organizationId,
+          currentUserId: user.id
         }
       })
 
-      if (authError) {
-        console.error('Erro do Supabase Auth:', authError)
-        throw new Error(authError.message || 'Erro ao criar usuário')
+      if (functionError) {
+        console.error('❌ [CREATE] Erro na Edge Function:', functionError)
+        throw new Error(functionError.message || 'Erro ao criar entregador via Edge Function')
       }
 
-      if (!authData.user) {
-        throw new Error('Usuário não foi criado')
+      if (!result?.success) {
+        console.error('❌ [CREATE] Edge Function retornou erro:', result?.error)
+        throw new Error(result?.error || 'Erro desconhecido ao criar entregador')
       }
 
-      const newUserId = authData.user.id
-      console.log('Usuário criado com ID:', newUserId)
-
-      // Aguardar um pouco para o trigger tentar criar o perfil
-      console.log('Aguardando trigger criar perfil...')
-      await new Promise(resolve => setTimeout(resolve, 3000))
-
-      // Verificar se perfil já existe
-      console.log('Verificando se perfil já existe...')
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', newUserId)
-        .single()
-
-      if (!existingProfile) {
-        console.log('Perfil não existe, criando manualmente...')
-        // Usar upsert para evitar conflitos
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            id: newUserId,
-            email: newDriverData.email,
-            full_name: newDriverData.full_name,
-            phone: newDriverData.phone || ''
-          })
-
-        if (profileError) {
-          console.error('Erro ao criar perfil:', profileError)
-          // Não falhar por causa do perfil, continuar
-        } else {
-          console.log('Perfil criado com sucesso')
-        }
-      } else {
-        console.log('Perfil já existe (criado pelo trigger)')
-      }
-
-      // Criar registro de entregador
-      console.log('Criando registro de entregador...')
-      const { data: driverData, error: driverError } = await supabase
-        .from('delivery_drivers')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          is_online: false,
-          total_today: 0
-        })
-        .select()
-        .single()
-
-      if (driverError) {
-        console.error('Erro ao criar registro de entregador:', driverError)
-        throw new Error('Erro ao criar registro de entregador: ' + driverError.message)
-      }
-
-      console.log('Registro de entregador criado:', driverData)
-
-      // Vincular à organização
-      console.log('Vinculando à organização...')
-      const { error: orgError } = await supabase
-        .from('user_organizations')
-        .insert({
-          user_id: newUserId,
-          organization_id: organizationId,
-          role: 'delivery_driver'
-        })
-
-      if (orgError) {
-        console.error('Erro ao vincular à organização:', orgError)
-        throw new Error('Erro ao vincular à organização: ' + orgError.message)
-      }
-
-      console.log('Entregador vinculado à organização com sucesso')
+      console.log('✅ [CREATE] Entregador criado via Edge Function:', result)
 
       toast.success('Entregador cadastrado com sucesso!')
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Aguardar um pouco mais e recarregar lista
-      console.log('Aguardando e recarregando lista de entregadores...')
+      // Recarregar lista imediatamente
+      console.log('🔄 [CREATE] Recarregando lista de entregadores...')
       setTimeout(async () => {
         await loadDrivers()
-      }, 2000)
+      }, 1000)
 
     } catch (error: any) {
-      console.error('Erro ao criar entregador:', error)
+      console.error('❌ [CREATE] Erro ao criar entregador:', error)
       toast.error(error.message || 'Erro ao criar entregador')
     } finally {
       setCreatingDriver(false)
@@ -510,7 +405,7 @@ export function DriversManagement() {
         .eq('id', driverId)
 
       if (error) {
-        console.error('Erro ao alterar status:', error)
+        console.error('❌ [TOGGLE] Erro ao alterar status:', error)
         throw error
       }
 
@@ -522,7 +417,7 @@ export function DriversManagement() {
 
       toast.success(`Entregador ${!currentStatus ? 'ativado' : 'desativado'} com sucesso`)
     } catch (error) {
-      console.error('Erro ao alterar status do entregador:', error)
+      console.error('❌ [TOGGLE] Erro ao alterar status do entregador:', error)
       toast.error('Erro ao alterar status do entregador')
     }
   }
@@ -540,7 +435,7 @@ export function DriversManagement() {
     const loadingToast = toast.loading('Excluindo entregador...')
 
     try {
-      console.log(`🗑️ Iniciando exclusão do entregador ID: ${driverId}, User ID: ${userId}`)
+      console.log(`🗑️ [DELETE] Iniciando exclusão: ${driverId}`)
 
       // Salvar estado original para restaurar em caso de erro
       const currentDrivers = [...drivers]
@@ -549,71 +444,54 @@ export function DriversManagement() {
       setDrivers(prev => prev.filter(driver => driver.id !== driverId))
 
       // Verificar se usuário tem permissão (é admin)
-      console.log('🔍 Verificando permissões do usuário...')
       const { data: userRole, error: roleError } = await supabase
         .from('user_organizations')
         .select('role, organization_id')
         .eq('user_id', user?.id)
         .single()
 
-      if (roleError || !userRole) {
-        console.error('❌ Erro ao verificar permissões:', roleError)
-        throw new Error('Erro ao verificar permissões do usuário')
-      }
-
-      if (userRole.role !== 'admin') {
+      if (roleError || !userRole || userRole.role !== 'admin') {
         throw new Error('Apenas administradores podem excluir entregadores')
       }
 
-      console.log('✅ Usuário tem permissão de admin')
-
-      // 1. Deletar registro de entregador
-      console.log('🗑️ Deletando registro de delivery_drivers...')
+      // Deletar registro de entregador
       const { error: driverError, count: driverCount } = await supabase
         .from('delivery_drivers')
         .delete({ count: 'exact' })
         .eq('id', driverId)
 
       if (driverError) {
-        console.error('❌ Erro ao deletar delivery_drivers:', driverError)
+        console.error('❌ [DELETE] Erro ao deletar delivery_drivers:', driverError)
         throw new Error(`Erro ao deletar entregador: ${driverError.message}`)
       }
-
-      console.log(`✅ Registro de delivery_drivers deletado. Linhas afetadas: ${driverCount}`)
 
       if (driverCount === 0) {
         throw new Error('Entregador não encontrado ou sem permissão para deletar')
       }
 
-      // 2. Deletar vínculos com organizações
-      console.log('🗑️ Deletando vínculos com organizações...')
-      const { error: orgError, count: orgCount } = await supabase
+      // Deletar vínculos com organizações
+      const { error: orgError } = await supabase
         .from('user_organizations')
-        .delete({ count: 'exact' })
+        .delete()
         .eq('user_id', userId)
         .eq('role', 'delivery_driver')
 
       if (orgError) {
-        console.error('⚠️ Erro ao deletar user_organizations:', orgError)
-        // Não falhar por isso, continuar
-      } else {
-        console.log(`✅ Vínculos com organizações deletados. Linhas afetadas: ${orgCount}`)
+        console.error('⚠️ [DELETE] Erro ao deletar user_organizations:', orgError)
       }
 
       toast.dismiss(loadingToast)
       toast.success('Entregador excluído com sucesso!')
       
-      console.log('✅ Exclusão concluída com sucesso')
+      console.log('✅ [DELETE] Exclusão concluída')
 
     } catch (error: any) {
-      console.error('❌ Erro ao excluir entregador:', error)
+      console.error('❌ [DELETE] Erro:', error)
       toast.dismiss(loadingToast)
       toast.error(error.message || 'Erro ao excluir entregador')
       
       // Restaurar lista original em caso de erro
       setDrivers(drivers)
-      
-      console.log('🔄 Lista restaurada devido ao erro')
     }
   }
 
@@ -733,16 +611,15 @@ export function DriversManagement() {
                       type="password"
                       value={newDriverData.password}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Qualquer senha"
+                      placeholder="Qualquer senha (sem espaços)"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Aceita qualquer tamanho de senha
+                      Aceita qualquer tamanho, apenas sem espaços
                     </p>
                   </div>
                   <div className="flex gap-2 pt-4">
-                    
                     <Button
                       variant="outline"
                       onClick={() => setShowNewDriverDialog(false)}
