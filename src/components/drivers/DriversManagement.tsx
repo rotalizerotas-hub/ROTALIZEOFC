@@ -127,12 +127,10 @@ export function DriversManagement() {
       }
 
       console.log('👤 [LOAD] Perfis encontrados:', profilesData?.length || 0)
-      console.log('👤 [LOAD] Dados dos perfis:', profilesData)
 
       // Combinar dados
       const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
-        console.log(`🔍 [LOAD] Processando driver ${driver.user_id}:`, profile)
         
         return {
           id: driver.id,
@@ -217,48 +215,22 @@ export function DriversManagement() {
       const newUserId = authData.user.id
       console.log('✅ [CREATE] Usuário criado:', newUserId)
 
-      // PASSO 3: Criar perfil GARANTIDO
-      console.log('📝 [CREATE] Criando perfil garantido...')
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // PASSO 3: Aguardar trigger automático do perfil
+      console.log('⏳ [CREATE] Aguardando trigger automático do perfil...')
+      await new Promise(resolve => setTimeout(resolve, 3000))
 
-      // Forçar criação do perfil
-      const profileData = {
-        id: newUserId,
-        email: newDriverData.email.trim(),
-        full_name: newDriverData.full_name.trim(),
-        phone: newDriverData.phone.trim() || ''
-      }
-
-      console.log('📤 [CREATE] Dados do perfil:', profileData)
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'id' })
-
-      if (profileError && profileError.message) {
-        console.error('⚠️ [CREATE] Erro perfil:', profileError.message)
-        // Tentar inserção direta
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert(profileData)
-        
-        if (insertError) {
-          console.error('❌ [CREATE] Erro inserção direta:', insertError)
-        } else {
-          console.log('✅ [CREATE] Perfil criado por inserção direta')
-        }
-      } else {
-        console.log('✅ [CREATE] Perfil criado por upsert')
-      }
-
-      // Verificar se perfil foi criado
-      const { data: verifyProfile } = await supabase
+      // Verificar se perfil foi criado pelo trigger
+      const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', newUserId)
         .single()
 
-      console.log('🔍 [CREATE] Verificação do perfil:', verifyProfile)
+      if (existingProfile) {
+        console.log('✅ [CREATE] Perfil criado automaticamente pelo trigger:', existingProfile)
+      } else {
+        console.log('⚠️ [CREATE] Perfil não foi criado pelo trigger, mas continuando...')
+      }
 
       // PASSO 4: Criar entregador
       console.log('🚚 [CREATE] Criando entregador...')
@@ -763,7 +735,6 @@ export function DriversManagement() {
                 placeholder="Nova senha"
                 className="rounded-xl"
               />
-            
             </div>
             <div className="flex gap-2 pt-4">
               <Button
