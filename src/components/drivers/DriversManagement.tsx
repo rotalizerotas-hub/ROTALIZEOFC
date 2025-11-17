@@ -357,28 +357,11 @@ export function DriversManagement() {
     }
   }
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email)
-  }
-
   const createNewDriver = async () => {
+    // VALIDAÇÕES MÍNIMAS - apenas campos obrigatórios
     if (!user || !newDriverData.full_name || !newDriverData.email || !newDriverData.password) {
       toast.error('Preencha todos os campos obrigatórios')
       return
-    }
-
-    // Validar email
-    if (!validateEmail(newDriverData.email)) {
-      toast.error('Digite um email válido (exemplo: joao@gmail.com)')
-      return
-    }
-
-    // Garantir que a senha tenha pelo menos 6 caracteres
-    let finalPassword = newDriverData.password
-    if (finalPassword.length < 6) {
-      finalPassword = finalPassword + '123456'.substring(0, 6 - finalPassword.length)
-      console.log('Senha ajustada para atender requisito mínimo do Supabase')
     }
 
     setCreatingDriver(true)
@@ -389,10 +372,10 @@ export function DriversManagement() {
 
       console.log('Criando usuário com email:', newDriverData.email)
 
-      // Criar usuário usando signup normal
+      // Criar usuário usando signup normal - SEM VALIDAÇÕES EXTRAS
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newDriverData.email.trim().toLowerCase(),
-        password: finalPassword,
+        email: newDriverData.email.trim(),
+        password: newDriverData.password,
         options: {
           data: {
             full_name: newDriverData.full_name,
@@ -724,10 +707,13 @@ export function DriversManagement() {
                       type="email"
                       value={newDriverData.email}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="joao@gmail.com"
+                      placeholder="Qualquer formato de email"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Aceita qualquer formato de email
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="phone">Telefone</Label>
@@ -747,15 +733,16 @@ export function DriversManagement() {
                       type="password"
                       value={newDriverData.password}
                       onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Senha de acesso (mín. 6 caracteres)"
+                      placeholder="Qualquer senha"
                       className="rounded-xl"
                       disabled={creatingDriver}
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Se a senha for menor que 6 caracteres, será completada automaticamente
+                      Aceita qualquer tamanho de senha
                     </p>
                   </div>
                   <div className="flex gap-2 pt-4">
+                    
                     <Button
                       variant="outline"
                       onClick={() => setShowNewDriverDialog(false)}
