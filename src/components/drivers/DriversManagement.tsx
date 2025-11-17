@@ -388,8 +388,8 @@ export function DriversManagement() {
             phone: newDriverData.phone || ''
           })
 
-        if (profileError) {
-          console.error('⚠️ [CREATE] Erro ao criar perfil:', profileError)
+        if (profileError && profileError.message) {
+          console.error('⚠️ [CREATE] Erro ao criar perfil:', profileError.message)
           // Não falhar por causa do perfil, continuar
         } else {
           console.log('✅ [CREATE] Perfil criado com sucesso')
@@ -439,11 +439,15 @@ export function DriversManagement() {
       setShowNewDriverDialog(false)
       setNewDriverData({ full_name: '', email: '', phone: '', password: '' })
       
-      // Recarregar lista imediatamente
+      // Recarregar lista múltiplas vezes para garantir que apareça
       console.log('🔄 [CREATE] Recarregando lista de entregadores...')
+      await loadDrivers()
+      
+      // Recarregar novamente após 2 segundos
       setTimeout(async () => {
+        console.log('🔄 [CREATE] Segundo recarregamento...')
         await loadDrivers()
-      }, 1000)
+      }, 2000)
 
     } catch (error: any) {
       console.error('❌ [CREATE] Erro ao criar entregador:', error)
@@ -736,6 +740,7 @@ export function DriversManagement() {
                 Online Agora
               </CardTitle>
             </CardHeader>
+            
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
                 {drivers.filter(d => d.is_online).length}
