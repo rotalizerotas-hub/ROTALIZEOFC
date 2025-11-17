@@ -77,10 +77,13 @@ export function NewOrderForm() {
         `)
         .eq('user_id', user.id)
 
-      const orgs = data?.map(uo => ({
+      const orgs = data?.map((uo: any) => ({
         id: uo.organizations.id,
         name: uo.organizations.name,
-        establishment_type: uo.organizations.establishment_types
+        establishment_type: uo.organizations.establishment_types || {
+          name: 'Estabelecimento',
+          emoji: '🏪'
+        }
       })) || []
 
       setOrganizations(orgs)
@@ -121,7 +124,7 @@ export function NewOrderForm() {
         })
 
       toast.success('Pedido criado com sucesso!')
-      router.push('/dashboard')
+      router.push('/')
     } catch (error) {
       console.error('Erro ao criar pedido:', error)
       toast.error('Erro ao criar pedido')

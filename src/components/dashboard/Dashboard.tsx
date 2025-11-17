@@ -10,6 +10,28 @@ import { supabase } from '@/lib/supabase'
 import { Plus, Users, Map, Package, TrendingUp } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
+interface Organization {
+  id: string
+  name: string
+  latitude: number
+  longitude: number
+  establishment_types: {
+    name: string
+    icon_url: string
+    emoji: string
+  }
+}
+
+interface Order {
+  id: string
+  customer_name: string
+  delivery_latitude: number
+  delivery_longitude: number
+  status: string
+  value: number
+  created_at: string
+}
+
 interface DashboardData {
   organizations: Array<{
     id: string
@@ -22,14 +44,7 @@ interface DashboardData {
       emoji: string
     }
   }>
-  orders: Array<{
-    id: string
-    customer_name: string
-    delivery_latitude: number
-    delivery_longitude: number
-    status: string
-    value: number
-  }>
+  orders: Order[]
   stats: {
     totalOrders: number
     pendingOrders: number
@@ -80,45 +95,60 @@ export function Dashboard() {
         `)
         .eq('user_id', user.id)
 
-      const organizations = userOrgs?.map(uo => ({
+      const organizations = userOrgs?.map((uo: any) => ({
         id: uo.organizations.id,
         name: uo.organizations.name,
         latitude: uo.organizations.latitude,
         longitude: uo.organizations.longitude,
-        establishment_type: uo.organizations.establishment_types
+        establishment_type: uo.organizations.establishment_types || {
+          name: 'Estabelecimento',
+          icon_url: '/icons/default.png',
+          emoji: '🏪'
+        }
       })) || []
 
       // Buscar pedidos das organizações
       const orgIds = organizations.map(org => org.id)
-      const { data: orders } = await supabase
-        .from('orders')
-        .select('*')
-        .in('organization_id', orgIds)
-        .order('created_at', { ascending: false })
-        .limit(50)
+      let orders: Order[] = []
+      
+      if (orgIds.length > 0) {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('*')
+          .in('organization_id', orgIds)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        orders = ordersData || []
+      }
 
       // Calcular estatísticas
       const today = new Date().toISOString().split('T')[0]
-      const todayOrders = orders?.filter(order => 
+      const todayOrders = orders.filter(order => 
         order.created_at.startsWith(today)
-      ) || []
+      )
 
-      const { data: activeDrivers } = await supabase
-        .from('delivery_drivers')
-        .select('id')
-        .in('organization_id', orgIds)
-        .eq('is_online', true)
+      let activeDriversCount = 0
+      if (orgIds.length > 0) {
+        const { data: activeDrivers } = await supabase
+          .from('delivery_drivers')
+          .select('id')
+          .in('organization_id', orgIds)
+          .eq('is_online', true)
+
+        activeDriversCount = activeDrivers?.length || 0
+      }
 
       const stats = {
-        totalOrders: orders?.length || 0,
-        pendingOrders: orders?.filter(o => o.status === 'pending').length || 0,
-        activeDrivers: activeDrivers?.length || 0,
+        totalOrders: orders.length,
+        pendingOrders: orders.filter(o => o.status === 'pending').length,
+        activeDrivers: activeDriversCount,
         todayRevenue: todayOrders.reduce((sum, order) => sum + order.value, 0)
       }
 
       setData({
         organizations,
-        orders: orders || [],
+        orders,
         stats
       })
     } catch (error) {

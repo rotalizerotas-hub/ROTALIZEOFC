@@ -55,7 +55,7 @@ export function MapboxMap({ organizations = [], orders = [], className = '' }: M
       map.current.on('load', () => {
         if (map.current) {
           // Adicionar fonte de dados para organizações
-          map.current.ad dSource('organizations', {
+          map.current.addSource('organizations', {
             type: 'geojson',
             data: {
               type: 'FeatureCollection',

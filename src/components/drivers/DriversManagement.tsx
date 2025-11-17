@@ -47,6 +47,12 @@ export function DriversManagement() {
 
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
 
+      if (orgIds.length === 0) {
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
       // Buscar entregadores das organizações
       const { data } = await supabase
         .from('delivery_drivers')
@@ -60,7 +66,21 @@ export function DriversManagement() {
         `)
         .in('organization_id', orgIds)
 
-      setDrivers(data || [])
+      const driversData = data?.map((driver: any) => ({
+        id: driver.id,
+        user_id: driver.user_id,
+        is_online: driver.is_online,
+        total_today: driver.total_today,
+        current_latitude: driver.current_latitude,
+        current_longitude: driver.current_longitude,
+        profiles: driver.profiles || {
+          full_name: 'Nome não informado',
+          phone: 'Telefone não informado',
+          email: 'Email não informado'
+        }
+      })) || []
+
+      setDrivers(driversData)
     } catch (error) {
       console.error('Erro ao carregar entregadores:', error)
       toast.error('Erro ao carregar entregadores')
@@ -216,7 +236,7 @@ export function DriversManagement() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {driver.profiles.full_name || 'Nome não informado'}
+                        {driver.profiles.full_name}
                       </h3>
                       <p className="text-sm text-gray-600">
                         {driver.profiles.phone} • {driver.profiles.email}
