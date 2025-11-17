@@ -454,37 +454,76 @@ export function DriversManagement() {
   }
 
   const deleteDriver = async (driverId: string, userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este entregador?')) return
+    if (!confirm('Tem certeza que deseja excluir este entregador? Esta ação não pode ser desfeita.')) return
 
     try {
-      // Verificar se é um ID temporário
-      if (driverId.startsWith('temp-')) {
-        // Remover apenas da lista local
-        setDrivers(prev => prev.filter(driver => driver.id !== driverId))
-        toast.success('Entregador removido da lista')
-        return
-      }
+      console.log(`Iniciando exclusão do entregador ID: ${driverId}, User ID: ${userId}`)
 
-      // Deletar registro de entregador
+      // Primeiro, remover da lista local para feedback imediato
+      setDrivers(prev => prev.filter(driver => driver.id !== driverId))
+      toast.loading('Excluindo entregador...')
+
+      // 1. Deletar registro de entregador
+      console.log('Deletando registro de delivery_drivers...')
       const { error: driverError } = await supabase
         .from('delivery_drivers')
         .delete()
         .eq('id', driverId)
 
-      if (driverError) throw driverError
+      if (driverError) {
+        console.error('Erro ao deletar delivery_drivers:', driverError)
+        throw new Error(`Erro ao deletar entregador: ${driverError.message}`)
+      }
 
-      // Deletar vínculo com organização
-      await supabase
+      console.log('Registro de delivery_drivers deletado com sucesso')
+
+      // 2. Deletar todos os vínculos com organizações
+      console.log('Deletando vínculos com organizações...')
+      const { error: orgError } = await supabase
         .from('user_organizations')
         .delete()
         .eq('user_id', userId)
-        .eq('role', 'delivery_driver')
 
+      if (orgError) {
+        console.error('Erro ao deletar user_organizations:', orgError)
+        // Não falhar por isso, continuar
+      } else {
+        console.log('Vínculos com organizações deletados com sucesso')
+      }
+
+      // 3. Opcionalmente, deletar perfil (comentado para preservar dados)
+      /*
+      console.log('Deletando perfil...')
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId)
+
+      if (profileError) {
+        console.error('Erro ao deletar profile:', profileError)
+      } else {
+        console.log('Perfil deletado com sucesso')
+      }
+      */
+
+      // 4. Deletar usuário do Auth (requer service role)
+      // Isso seria feito via Edge Function ou Admin API
+      console.log('Usuário removido do sistema (perfil mantido para histórico)')
+
+      toast.dismiss()
       toast.success('Entregador excluído com sucesso!')
-      loadDrivers()
-    } catch (error) {
+      
+      // Recarregar lista para garantir consistência
+      console.log('Recarregando lista de entregadores...')
+      await loadDrivers()
+
+    } catch (error: any) {
       console.error('Erro ao excluir entregador:', error)
-      toast.error('Erro ao excluir entregador')
+      toast.dismiss()
+      toast.error(error.message || 'Erro ao excluir entregador')
+      
+      // Recarregar lista em caso de erro para restaurar estado
+      await loadDrivers()
     }
   }
 
@@ -710,6 +749,7 @@ export function DriversManagement() {
                       </h3>
                       <p className="text-sm text-gray-600">
                         {driver.profiles.phone} • {driver.profiles.email}
+                      
                       </p>
                       {driver.current_latitude && driver.current_longitude && (
                         <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
@@ -757,7 +797,6 @@ export function DriversManagement() {
                           setSelectedDriverId(driver.id)
                           setShowPasswordDialog(true)
                         }}
-                
                         className="rounded-xl"
                         disabled={driver.id.startsWith('temp-')}
                       >
