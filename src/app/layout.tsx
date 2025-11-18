@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/components/auth/AuthProvider";
-import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-inter",
-  subsets: ["latin"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
 
@@ -26,20 +19,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
-      >
-        <AuthProvider>
-          {children}
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              style: {
-                borderRadius: '12px',
-              },
-            }}
-          />
-        </AuthProvider>
+      <body className={`${inter.variable} antialiased`}>
+        {children}
       </body>
     </html>
   );
