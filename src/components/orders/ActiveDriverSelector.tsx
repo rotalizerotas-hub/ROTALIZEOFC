@@ -184,11 +184,9 @@ export function ActiveDriverSelector({
     
     console.log(`🔄 [MODE] Modo ${newAutomatic ? 'automático' : 'manual'} ativado`)
     
-    if (!newAutomatic) {
-      // Se desativou automático, limpar seleção
-      onDriverSelect(selectedDriverId || null)
-    }
-  }, [isAutomatic, onDriverSelect, selectedDriverId])
+    // REMOVIDO: Não limpa seleção quando desativa automático
+    // O botão só desliga manualmente, mantém estado atual
+  }, [isAutomatic])
 
   const handleManualDriverSelect = useCallback((driverId: string) => {
     onDriverSelect(driverId)
