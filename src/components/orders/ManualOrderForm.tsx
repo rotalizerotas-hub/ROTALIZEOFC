@@ -510,7 +510,7 @@ export function ManualOrderForm() {
                   id="order_number"
                   {...form.register('order_number')}
                   placeholder="Digite o número do pedido (ex: 12345)"
-                  className="rounded-xl"
+                  className="rounded-xl w-48"
                 />
                 <p className="text-xs text-gray-500">
                   Campo opcional para identificar o pedido com um número específico
