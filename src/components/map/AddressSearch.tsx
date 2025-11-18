@@ -33,18 +33,16 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
     setIsSearching(true)
 
     try {
-      console.log('🔍 [MAPBOX] Iniciando busca para:', searchQuery)
+      console.log('🔍 [MAPBOX GEOCODING] Buscando:', searchQuery)
 
       // Token do Mapbox
       const mapboxToken = 'pk.eyJ1Ijoicm90YWxpemVvZmljaWFsIiwiYSI6ImNtaHdidmV2dTA1dTgya3B0dGNzZ2Q4ZHUifQ.1kJiJcybFKIyF_0rpNHmbA'
 
-      // Preparar query para busca no Brasil
-      const encodedQuery = encodeURIComponent(searchQuery.trim())
-      
       // URL da API de Geocoding do Mapbox
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${mapboxToken}&country=BR&language=pt&limit=1`
+      const encodedQuery = encodeURIComponent(searchQuery.trim())
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodedQuery}.json?access_token=${mapboxToken}&country=BR&language=pt&limit=1&types=address,poi`
 
-      console.log('🌐 [MAPBOX] Fazendo requisição para Mapbox Geocoding API')
+      console.log('🌐 [MAPBOX] Fazendo requisição...')
 
       const response = await fetch(url)
       
@@ -53,29 +51,29 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
       }
 
       const data = await response.json()
-      console.log('📡 [MAPBOX] Resposta da API:', data)
+      console.log('📡 [MAPBOX] Resposta completa:', data)
 
       if (!data.features || data.features.length === 0) {
         throw new Error('Endereço não encontrado')
       }
 
       const feature = data.features[0]
-      const { geometry, place_name, context } = feature
+      const { geometry, place_name, context, properties } = feature
 
-      console.log('📍 [MAPBOX] Feature encontrada:', feature)
+      console.log('📍 [MAPBOX] Feature selecionada:', feature)
 
-      // Extrair componentes do endereço do contexto
+      // Extrair componentes do endereço
       let street = ''
       let number = ''
       let neighborhood = ''
       let city = ''
 
-      // Tentar extrair da place_name primeiro
+      // Tentar extrair da place_name
       const placeParts = place_name.split(',').map((part: string) => part.trim())
       
       if (placeParts.length > 0) {
         const firstPart = placeParts[0]
-        // Tentar extrair número da primeira parte
+        // Extrair número se existir
         const numberMatch = firstPart.match(/^(.+?)\s+(\d+)/)
         if (numberMatch) {
           street = numberMatch[1].trim()
@@ -85,13 +83,13 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
         }
       }
 
-      // Extrair informações do contexto
+      // Extrair do contexto
       if (context) {
         context.forEach((item: any) => {
           const id = item.id || ''
           
           if (id.includes('neighborhood') || id.includes('locality')) {
-            neighborhood = item.text
+            if (!neighborhood) neighborhood = item.text
           } else if (id.includes('place') || id.includes('district')) {
             if (!city) city = item.text
           } else if (id.includes('region')) {
@@ -100,14 +98,13 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
         })
       }
 
-      // Fallback para extrair cidade dos placeParts
-      if (!city && placeParts.length > 1) {
-        city = placeParts[placeParts.length - 1]
-      }
-
-      // Se não conseguiu extrair bairro, tentar dos placeParts
-      if (!neighborhood && placeParts.length > 2) {
+      // Fallbacks
+      if (!neighborhood && placeParts.length > 1) {
         neighborhood = placeParts[1]
+      }
+      
+      if (!city && placeParts.length > 2) {
+        city = placeParts[placeParts.length - 1]
       }
 
       const addressData = {
@@ -120,63 +117,14 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
         longitude: geometry.coordinates[0]
       }
 
-      console.log('✅ [MAPBOX] Dados processados:', addressData)
+      console.log('✅ [MAPBOX] Endereço processado:', addressData)
+      
       onAddressFound(addressData)
       toast.success('Endereço encontrado!')
 
     } catch (error) {
       console.error('❌ [MAPBOX] Erro na busca:', error)
-      
-      // Fallback: criar endereço baseado no texto digitado
-      console.log('🔄 [MAPBOX] Usando fallback local')
-      
-      const addressParts = searchQuery.split(',').map(s => s.trim())
-      let street = 'Rua Exemplo'
-      let number = '100'
-      let neighborhood = 'Centro'
-      let city = 'Belo Horizonte'
-      
-      if (addressParts.length >= 1) {
-        const firstPart = addressParts[0]
-        const numberMatch = firstPart.match(/^(.+?)\s+(\d+)/)
-        if (numberMatch) {
-          street = numberMatch[1]
-          number = numberMatch[2]
-        } else {
-          street = firstPart
-        }
-      }
-      
-      if (addressParts.length >= 2) {
-        neighborhood = addressParts[1]
-      }
-      
-      if (addressParts.length >= 3) {
-        city = addressParts[2]
-      }
-
-      // Coordenadas de Belo Horizonte com variação baseada no endereço
-      const hash = searchQuery.split('').reduce((a, b) => {
-        a = ((a << 5) - a) + b.charCodeAt(0)
-        return a & a
-      }, 0)
-      
-      const latitude = -19.9167 + (hash % 1000) / 100000
-      const longitude = -43.9345 + (hash % 1000) / 100000
-
-      const fallbackData = {
-        fullAddress: searchQuery,
-        street: street,
-        number: number,
-        neighborhood: neighborhood,
-        city: city,
-        latitude: latitude,
-        longitude: longitude
-      }
-
-      console.log('✅ [MAPBOX] Fallback criado:', fallbackData)
-      onAddressFound(fallbackData)
-      toast.success('Endereço localizado! (Modo offline)')
+      toast.error('Endereço não encontrado. Tente ser mais específico.')
     } finally {
       setIsSearching(false)
     }
@@ -194,7 +142,7 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
       <div>
         <Label htmlFor="address_search" className="flex items-center gap-2">
           <MapPin className="w-4 h-4" />
-          Buscar Endereço (Mapbox)
+          Buscar Endereço
         </Label>
         <div className="flex gap-2 mt-2">
           <Input

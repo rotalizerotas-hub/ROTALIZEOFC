@@ -1,221 +1,70 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import mapboxgl from 'mapbox-gl'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import { toast } from 'sonner'
 
-// Token público do Mapbox fornecido
-mapboxgl.accessToken = 'pk.eyJ1Ijoicm90YWxpemVvZmljaWFsIiwiYSI6ImNtaHdidmV2dTA1dTgya3B0dGNzZ2Q4ZHUifQ.1kJiJcybFKIyF_0rpNHmbA'
+// Definir tipos para evitar erros de TypeScript
+declare global {
+  interface Window {
+    mapboxgl: any
+  }
+}
 
 interface MapboxMapProps {
-  organizations?: Array<{
-    id: string
-    name: string
-    latitude: number
-    longitude: number
-    establishment_type: {
-      name: string
-      icon_url: string
-      emoji: string
-    }
-  }>
   orders?: Array<{
     id: string
-    customer_name: string
-    delivery_latitude: number
-    delivery_longitude: number
+    latitude: number
+    longitude: number
+    customerName: string
     status: string
+    categoryEmoji: string
+    orderNumber?: string
   }>
+  centerLat?: number
+  centerLng?: number
+  zoom?: number
+  onOrderClick?: (orderId: string) => void
   className?: string
 }
 
-// Função helper para traduzir status
-const getStatusText = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    pending: 'Pendente',
-    assigned: 'Atribuído',
-    in_transit: 'Em trânsito',
-    delivered: 'Entregue',
-    cancelled: 'Cancelado'
+const getStatusColor = (status: string): string => {
+  const colors = {
+    pending: '#ffd93d',
+    assigned: '#6c5ce7',
+    in_transit: '#fd79a8',
+    delivered: '#00b894',
+    cancelled: '#ddd'
   }
-  
-  return statusMap[status] || status
+  return colors[status as keyof typeof colors] || '#ffd93d'
 }
 
-export function MapboxMap({ organizations = [], orders = [], className = '' }: MapboxMapProps) {
+export function MapboxMap({ 
+  orders = [], 
+  centerLat = -19.9167, 
+  centerLng = -43.9345, 
+  zoom = 12,
+  onOrderClick,
+  className = '' 
+}: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<mapboxgl.Map | null>(null)
-  const [lng] = useState(-44.5550) // Longitude central de Minas Gerais
-  const [lat] = useState(-18.5122) // Latitude central de Minas Gerais
-  const [zoom] = useState(10)
+  const map = useRef<any>(null)
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const markersRef = useRef<any[]>([])
 
   useEffect(() => {
-    if (map.current) return // Inicializar mapa apenas uma vez
+    // Carregar Mapbox GL JS dinamicamente
+    if (!window.mapboxgl) {
+      const script = document.createElement('script')
+      script.src = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'
+      script.onload = initializeMap
+      document.head.appendChild(script)
 
-    if (mapContainer.current) {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: 'mapbox://styles/mapbox/streets-v12',
-        center: [lng, lat],
-        zoom: zoom,
-        attributionControl: false,
-      })
-
-      // Adicionar controles de navegação
-      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
-
-      // Personalizar estilo do mapa
-      map.current.on('load', () => {
-        if (map.current) {
-          // Adicionar fonte de dados para organizações
-          map.current.addSource('organizations', {
-            type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: organizations.map(org => ({
-                type: 'Feature',
-                geometry: {
-                  type: 'Point',
-                  coordinates: [org.longitude, org.latitude]
-                },
-                properties: {
-                  id: org.id,
-                  name: org.name,
-                  type: org.establishment_type.name,
-                  emoji: org.establishment_type.emoji,
-                  icon_url: org.establishment_type.icon_url
-                }
-              }))
-            }
-          })
-
-          // Adicionar camada para organizações
-          map.current.addLayer({
-            id: 'organizations',
-            type: 'circle',
-            source: 'organizations',
-            paint: {
-              'circle-radius': 12,
-              'circle-color': [
-                'case',
-                ['==', ['get', 'type'], 'Pizzaria'], '#ff6b6b',
-                ['==', ['get', 'type'], 'Hamburgueria'], '#4ecdc4',
-                ['==', ['get', 'type'], 'Farmácia'], '#45b7d1',
-                ['==', ['get', 'type'], 'Supermercado'], '#96ceb4',
-                '#6c5ce7' // cor padrão
-              ],
-              'circle-stroke-width': 3,
-              'circle-stroke-color': '#ffffff',
-              'circle-opacity': 0.9
-            }
-          })
-
-          // Adicionar fonte de dados para pedidos
-          map.current.addSource('orders', {
-            type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: orders.map(order => ({
-                type: 'Feature',
-                geometry: {
-                  type: 'Point',
-                  coordinates: [order.delivery_longitude, order.delivery_latitude]
-                },
-                properties: {
-                  id: order.id,
-                  customer_name: order.customer_name,
-                  status: order.status
-                }
-              }))
-            }
-          })
-
-          // Adicionar camada para pedidos
-          map.current.addLayer({
-            id: 'orders',
-            type: 'circle',
-            source: 'orders',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': [
-                'case',
-                ['==', ['get', 'status'], 'pending'], '#ffd93d',
-                ['==', ['get', 'status'], 'assigned'], '#6c5ce7',
-                ['==', ['get', 'status'], 'in_transit'], '#fd79a8',
-                ['==', ['get', 'status'], 'delivered'], '#00b894',
-                '#ddd' // cancelado
-              ],
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#ffffff',
-              'circle-opacity': 0.8
-            }
-          })
-
-          // Adicionar popups para organizações
-          map.current.on('click', 'organizations', (e) => {
-            if (e.features && e.features[0]) {
-              const feature = e.features[0]
-              const coordinates = (feature.geometry as any).coordinates.slice()
-              const properties = feature.properties
-              
-              if (properties) {
-                const { name, type, emoji } = properties
-
-                new mapboxgl.Popup()
-                  .setLngLat(coordinates)
-                  .setHTML(`
-                    <div class="p-3">
-                      <div class="flex items-center gap-2 mb-2">
-                        <span class="text-2xl">${emoji || '🏪'}</span>
-                        <h3 class="font-semibold text-gray-800">${name || 'Estabelecimento'}</h3>
-                      </div>
-                      <p class="text-sm text-gray-600">${type || 'Tipo não informado'}</p>
-                    </div>
-                  `)
-                  .addTo(map.current!)
-              }
-            }
-          })
-
-          // Adicionar popups para pedidos
-          map.current.on('click', 'orders', (e) => {
-            if (e.features && e.features[0]) {
-              const feature = e.features[0]
-              const coordinates = (feature.geometry as any).coordinates.slice()
-              const properties = feature.properties
-              
-              if (properties) {
-                const { customer_name, status } = properties
-                const statusText = getStatusText(status || 'unknown')
-
-                new mapboxgl.Popup()
-                  .setLngLat(coordinates)
-                  .setHTML(`
-                    <div class="p-3">
-                      <h3 class="font-semibold text-gray-800 mb-1">${customer_name || 'Cliente'}</h3>
-                      <p class="text-sm text-gray-600">Status: ${statusText}</p>
-                    </div>
-                  `)
-                  .addTo(map.current!)
-              }
-            }
-          })
-
-          // Cursor pointer nos pontos
-          map.current.on('mouseenter', 'organizations', () => {
-            if (map.current) map.current.getCanvas().style.cursor = 'pointer'
-          })
-          map.current.on('mouseleave', 'organizations', () => {
-            if (map.current) map.current.getCanvas().style.cursor = ''
-          })
-          map.current.on('mouseenter', 'orders', () => {
-            if (map.current) map.current.getCanvas().style.cursor = 'pointer'
-          })
-          map.current.on('mouseleave', 'orders', () => {
-            if (map.current) map.current.getCanvas().style.cursor = ''
-          })
-        }
-      })
+      const link = document.createElement('link')
+      link.href = 'https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css'
+      link.rel = 'stylesheet'
+      document.head.appendChild(link)
+    } else {
+      initializeMap()
     }
 
     return () => {
@@ -224,58 +73,197 @@ export function MapboxMap({ organizations = [], orders = [], className = '' }: M
         map.current = null
       }
     }
-  }, [lng, lat, zoom])
+  }, [])
 
-  // Atualizar dados quando props mudarem
+  const initializeMap = () => {
+    if (map.current || !mapContainer.current) return
+
+    // Token do Mapbox
+    window.mapboxgl.accessToken = 'pk.eyJ1Ijoicm90YWxpemVvZmljaWFsIiwiYSI6ImNtaHdidmV2dTA1dTgya3B0dGNzZ2Q4ZHUifQ.1kJiJcybFKIyF_0rpNHmbA'
+
+    console.log('🗺️ [MAPBOX] Inicializando mapa...')
+
+    map.current = new window.mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/streets-v12',
+      center: [centerLng, centerLat],
+      zoom: zoom,
+      attributionControl: false
+    })
+
+    // Adicionar controles
+    map.current.addControl(new window.mapboxgl.NavigationControl(), 'top-right')
+
+    map.current.on('load', () => {
+      console.log('✅ [MAPBOX] Mapa carregado com sucesso')
+      setMapLoaded(true)
+      updateMarkers()
+    })
+
+    map.current.on('error', (e: any) => {
+      console.error('❌ [MAPBOX] Erro no mapa:', e)
+    })
+  }
+
+  // Atualizar marcadores quando dados mudarem
   useEffect(() => {
-    if (map.current && map.current.isStyleLoaded()) {
-      const organizationsSource = map.current.getSource('organizations') as mapboxgl.GeoJSONSource
-      if (organizationsSource) {
-        organizationsSource.setData({
-          type: 'FeatureCollection',
-          features: organizations.map(org => ({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [org.longitude, org.latitude]
-            },
-            properties: {
-              id: org.id,
-              name: org.name,
-              type: org.establishment_type.name,
-              emoji: org.establishment_type.emoji,
-              icon_url: org.establishment_type.icon_url
-            }
-          }))
-        })
-      }
+    if (mapLoaded && map.current) {
+      updateMarkers()
+    }
+  }, [orders, mapLoaded])
 
-      const ordersSource = map.current.getSource('orders') as mapboxgl.GeoJSONSource
-      if (ordersSource) {
-        ordersSource.setData({
-          type: 'FeatureCollection',
-          features: orders.map(order => ({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [order.delivery_longitude, order.delivery_latitude]
-            },
-            properties: {
-              id: order.id,
-              customer_name: order.customer_name,
-              status: order.status
-            }
-          }))
-        })
+  // Centralizar mapa quando coordenadas mudarem
+  useEffect(() => {
+    if (mapLoaded && map.current && centerLat && centerLng) {
+      console.log('📍 [MAPBOX] Centralizando mapa em:', { centerLat, centerLng, zoom })
+      
+      map.current.flyTo({
+        center: [centerLng, centerLat],
+        zoom: zoom,
+        duration: 1500
+      })
+    }
+  }, [centerLat, centerLng, zoom, mapLoaded])
+
+  const clearMarkers = () => {
+    markersRef.current.forEach(marker => marker.remove())
+    markersRef.current = []
+  }
+
+  const updateMarkers = () => {
+    if (!map.current || !window.mapboxgl) return
+
+    console.log('🔄 [MAPBOX] Atualizando marcadores...', orders.length)
+    clearMarkers()
+
+    orders.forEach((order, index) => {
+      console.log(`📌 [MAPBOX] Criando marcador ${index + 1}:`, order)
+
+      // Criar elemento do marcador
+      const markerElement = document.createElement('div')
+      markerElement.className = 'custom-marker'
+      markerElement.style.cssText = `
+        background: ${getStatusColor(order.status)};
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 3px solid white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+      `
+      
+      markerElement.innerHTML = order.categoryEmoji
+
+      // Eventos do marcador
+      markerElement.addEventListener('mouseenter', () => {
+        markerElement.style.transform = 'scale(1.2)'
+      })
+
+      markerElement.addEventListener('mouseleave', () => {
+        markerElement.style.transform = 'scale(1)'
+      })
+
+      markerElement.addEventListener('click', () => {
+        console.log('🖱️ [MAPBOX] Marcador clicado:', order.id)
+        if (onOrderClick) {
+          onOrderClick(order.id)
+        }
+        showOrderPopup(order)
+      })
+
+      // Criar marcador no mapa
+      const marker = new window.mapboxgl.Marker(markerElement)
+        .setLngLat([order.longitude, order.latitude])
+        .addTo(map.current)
+
+      markersRef.current.push(marker)
+      
+      console.log(`✅ [MAPBOX] Marcador ${index + 1} adicionado em:`, [order.longitude, order.latitude])
+    })
+  }
+
+  const showOrderPopup = (order: any) => {
+    if (!map.current || !window.mapboxgl) return
+
+    console.log('💬 [MAPBOX] Mostrando popup:', order.id)
+
+    const popup = new window.mapboxgl.Popup({ 
+      offset: 25,
+      closeButton: true,
+      closeOnClick: false
+    })
+      .setLngLat([order.longitude, order.latitude])
+      .setHTML(`
+        <div style="padding: 16px; min-width: 200px; font-family: system-ui;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span style="font-size: 24px;">${order.categoryEmoji}</span>
+            <h3 style="margin: 0; font-weight: 600; color: #333;">${order.customerName}</h3>
+          </div>
+          ${order.orderNumber ? `<p style="margin: 6px 0; color: #666; font-size: 14px;">📋 Pedido #${order.orderNumber}</p>` : ''}
+          <p style="margin: 6px 0; color: #666; font-size: 14px;">📍 Status: ${order.status}</p>
+          <button 
+            onclick="window.assumeRoute && window.assumeRoute('${order.id}')" 
+            style="
+              background: linear-gradient(45deg, #00b894, #00cec9);
+              color: white;
+              border: none;
+              padding: 10px 18px;
+              border-radius: 10px;
+              cursor: pointer;
+              font-weight: 600;
+              margin-top: 12px;
+              width: 100%;
+              font-size: 14px;
+            "
+          >
+            🚀 Assumir Rota
+          </button>
+        </div>
+      `)
+      .addTo(map.current)
+  }
+
+  // Função global para assumir rota
+  useEffect(() => {
+    (window as any).assumeRoute = (orderId: string) => {
+      console.log('🚀 [ROUTE] Assumindo rota para:', orderId)
+      const order = orders.find(o => o.id === orderId)
+      if (order) {
+        toast.success(`Rota assumida para ${order.customerName}! 🗺️`)
       }
     }
-  }, [organizations, orders])
+
+    return () => {
+      delete (window as any).assumeRoute
+    }
+  }, [orders])
 
   return (
-    <div 
-      ref={mapContainer} 
-      className={`w-full h-full rounded-2xl shadow-lg overflow-hidden ${className}`}
-      style={{ minHeight: '400px' }}
-    />
+    <div className={`relative w-full h-full rounded-2xl shadow-lg overflow-hidden ${className}`}>
+      <div 
+        ref={mapContainer} 
+        className="w-full h-full"
+        style={{ minHeight: '400px' }}
+      />
+      
+      {!mapLoaded && (
+        <div className="absolute inset-0 bg-gray-100 flex items-center justify-center rounded-2xl">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando Mapbox...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Badge do Mapbox */}
+      <div className="absolute bottom-4 right-4 bg-black/80 text-white px-2 py-1 rounded text-xs">
+        Mapbox
+      </div>
+    </div>
   )
 }
