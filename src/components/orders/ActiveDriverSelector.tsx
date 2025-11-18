@@ -223,15 +223,18 @@ export function ActiveDriverSelector({
             </div>
           </div>
         </div>
-        <Button
+        <button
           type="button"
-          variant={isAutomatic ? "default" : "outline"}
           onClick={handleAutomaticToggle}
           disabled={disabled || loading || activeDrivers.length === 0}
-          className="rounded-xl"
+          className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input shadow-sm h-9 px-4 py-2 rounded-xl lasy-highlight ${
+            isAutomatic 
+              ? 'bg-green-500 text-white hover:bg-green-600 border-green-500' 
+              : 'bg-red-500 text-white hover:bg-red-600 border-red-500'
+          }`}
         >
-          {isAutomatic ? 'Automático ON' : 'Ativar Automático'}
-        </Button>
+          {isAutomatic ? 'ON Automático' : 'OFF Automático'}
+        </button>
       </div>
 
       {/* Modo Automático - Próximo Entregador */}
