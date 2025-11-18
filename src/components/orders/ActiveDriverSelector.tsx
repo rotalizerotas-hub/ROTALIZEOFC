@@ -71,6 +71,31 @@ export function ActiveDriverSelector({
     }
   }, [])
 
+  // NOVO: Salvar estado automático
+  const saveAutomaticState = useCallback((automatic: boolean) => {
+    try {
+      localStorage.setItem('automaticDriverSelection', automatic.toString())
+      setIsAutomatic(automatic)
+      console.log('💾 [AUTOMATIC] Estado salvo:', automatic)
+    } catch (error) {
+      console.log('⚠️ [AUTOMATIC] Erro ao salvar estado:', error)
+    }
+  }, [])
+
+  // NOVO: Carregar estado automático
+  const loadAutomaticState = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('automaticDriverSelection')
+      if (stored) {
+        const automaticState = stored === 'true'
+        setIsAutomatic(automaticState)
+        console.log('📋 [AUTOMATIC] Estado carregado:', automaticState)
+      }
+    } catch (error) {
+      console.log('⚠️ [AUTOMATIC] Erro ao carregar estado:', error)
+    }
+  }, [])
+
   const loadActiveDrivers = useCallback(async () => {
     if (!user) return
 
@@ -163,8 +188,9 @@ export function ActiveDriverSelector({
     if (user) {
       loadActiveDrivers()
       loadRoundRobinIndex()
+      loadAutomaticState() // NOVO: Carregar estado automático
     }
-  }, [user, loadActiveDrivers, loadRoundRobinIndex])
+  }, [user, loadActiveDrivers, loadRoundRobinIndex, loadAutomaticState])
 
   // Gerenciar seleção automática apenas quando necessário
   useEffect(() => {
@@ -180,13 +206,13 @@ export function ActiveDriverSelector({
 
   const handleAutomaticToggle = useCallback(() => {
     const newAutomatic = !isAutomatic
-    setIsAutomatic(newAutomatic)
+    saveAutomaticState(newAutomatic) // MODIFICADO: Usar função que salva no localStorage
     
     console.log(`🔄 [MODE] Modo ${newAutomatic ? 'automático' : 'manual'} ativado`)
     
     // REMOVIDO: Não limpa seleção quando desativa automático
     // O botão só desliga manualmente, mantém estado atual
-  }, [isAutomatic])
+  }, [isAutomatic, saveAutomaticState])
 
   const handleManualDriverSelect = useCallback((driverId: string) => {
     onDriverSelect(driverId)
