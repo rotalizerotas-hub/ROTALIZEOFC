@@ -56,13 +56,21 @@ export function DeliveryDriverSelector({
     if (!user) return
 
     try {
-      console.log('🚚 [DRIVER SELECTOR] Carregando entregadores...')
+      console.log('🚚 [DRIVER SELECTOR] === INICIANDO CARREGAMENTO ===')
+      console.log('👤 [DRIVER SELECTOR] Usuário ID:', user.id)
 
-      // Buscar organizações do usuário
+      // PASSO 1: Buscar organizações do usuário (query simples)
+      console.log('🏢 [DRIVER SELECTOR] PASSO 1: Buscando organizações...')
+      
       const { data: userOrgs, error: userOrgsError } = await supabase
         .from('user_organizations')
         .select('organization_id')
         .eq('user_id', user.id)
+
+      console.log('🏢 [DRIVER SELECTOR] Resultado organizações:')
+      console.log('   - Erro:', userOrgsError)
+      console.log('   - Dados:', userOrgs)
+      console.log('   - Quantidade:', userOrgs?.length || 0)
 
       if (userOrgsError) {
         console.error('❌ [DRIVER SELECTOR] Erro ao buscar organizações:', userOrgsError)
@@ -72,6 +80,7 @@ export function DeliveryDriverSelector({
       }
 
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+      console.log('🏢 [DRIVER SELECTOR] IDs das organizações:', orgIds)
 
       if (orgIds.length === 0) {
         console.log('📭 [DRIVER SELECTOR] Usuário sem organizações')
@@ -80,16 +89,19 @@ export function DeliveryDriverSelector({
         return
       }
 
-      // Buscar entregadores das organizações
+      // PASSO 2: Buscar entregadores (query simples, sem joins)
+      console.log('🚚 [DRIVER SELECTOR] PASSO 2: Buscando entregadores...')
+      
       const { data: driversData, error: driversError } = await supabase
         .from('delivery_drivers')
-        .select(`
-          id,
-          user_id,
-          is_online
-        `)
+        .select('id, user_id, is_online, organization_id, created_at')
         .in('organization_id', orgIds)
-        .order('created_at', { ascending: true }) // Ordem consistente para Robin Round
+        .order('created_at', { ascending: true })
+
+      console.log('🚚 [DRIVER SELECTOR] Resultado entregadores:')
+      console.log('   - Erro:', driversError)
+      console.log('   - Dados:', driversData)
+      console.log('   - Quantidade:', driversData?.length || 0)
 
       if (driversError) {
         console.error('❌ [DRIVER SELECTOR] Erro ao buscar entregadores:', driversError)
@@ -105,23 +117,40 @@ export function DeliveryDriverSelector({
         return
       }
 
-      // Buscar perfis dos entregadores
-      const userIds = driversData.map(d => d.user_id).filter(Boolean)
+      // PASSO 3: Buscar perfis dos entregadores (query simples)
+      console.log('👤 [DRIVER SELECTOR] PASSO 3: Buscando perfis...')
       
+      const userIds = driversData.map(d => d.user_id).filter(Boolean)
+      console.log('👤 [DRIVER SELECTOR] User IDs para buscar:', userIds)
+
+      if (userIds.length === 0) {
+        console.log('⚠️ [DRIVER SELECTOR] Nenhum user_id válido')
+        setDrivers([])
+        setLoading(false)
+        return
+      }
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, email')
         .in('id', userIds)
 
+      console.log('👤 [DRIVER SELECTOR] Resultado perfis:')
+      console.log('   - Erro:', profilesError)
+      console.log('   - Dados:', profilesData)
+      console.log('   - Quantidade:', profilesData?.length || 0)
+
       if (profilesError) {
-        console.error('❌ [DRIVER SELECTOR] Erro ao buscar perfis:', profilesError)
+        console.error('⚠️ [DRIVER SELECTOR] Erro ao buscar perfis (continuando):', profilesError)
       }
 
-      // Combinar dados
+      // PASSO 4: Combinar dados
+      console.log('🔄 [DRIVER SELECTOR] PASSO 4: Combinando dados...')
+      
       const processedDrivers: DeliveryDriver[] = driversData.map((driver: any) => {
         const profile = profilesData?.find(p => p.id === driver.user_id)
         
-        return {
+        const driverData = {
           id: driver.id,
           user_id: driver.user_id,
           is_online: Boolean(driver.is_online),
@@ -130,16 +159,25 @@ export function DeliveryDriverSelector({
             email: profile?.email || 'entregador@exemplo.com'
           }
         }
+
+        console.log(`👤 [DRIVER SELECTOR] Processado: ${driverData.profiles.full_name} (${driverData.is_online ? 'Online' : 'Offline'})`)
+        return driverData
       })
 
-      console.log('✅ [DRIVER SELECTOR] Entregadores carregados:', processedDrivers.length)
+      console.log('✅ [DRIVER SELECTOR] === CARREGAMENTO CONCLUÍDO ===')
+      console.log('📊 [DRIVER SELECTOR] Total processados:', processedDrivers.length)
+      console.log('🟢 [DRIVER SELECTOR] Online:', processedDrivers.filter(d => d.is_online).length)
+      console.log('🔴 [DRIVER SELECTOR] Offline:', processedDrivers.filter(d => !d.is_online).length)
+
       setDrivers(processedDrivers)
 
     } catch (error) {
-      console.error('❌ [DRIVER SELECTOR] Erro geral:', error)
+      console.error('❌ [DRIVER SELECTOR] ERRO GERAL:', error)
+      console.error('❌ [DRIVER SELECTOR] Stack trace:', error)
       setDrivers([])
     } finally {
       setLoading(false)
+      console.log('🏁 [DRIVER SELECTOR] Loading finalizado')
     }
   }
 
@@ -148,6 +186,7 @@ export function DeliveryDriverSelector({
       const stored = localStorage.getItem('lastAssignedDriverIndex')
       if (stored) {
         setLastAssignedIndex(parseInt(stored, 10))
+        console.log('📋 [ROBIN ROUND] Índice carregado:', stored)
       }
     } catch (error) {
       console.log('⚠️ [ROBIN ROUND] Erro ao carregar índice:', error)
@@ -158,13 +197,17 @@ export function DeliveryDriverSelector({
     try {
       localStorage.setItem('lastAssignedDriverIndex', index.toString())
       setLastAssignedIndex(index)
+      console.log('💾 [ROBIN ROUND] Índice salvo:', index)
     } catch (error) {
       console.log('⚠️ [ROBIN ROUND] Erro ao salvar índice:', error)
     }
   }
 
   const getNextDriverRobinRound = (): DeliveryDriver | null => {
-    if (drivers.length === 0) return null
+    if (drivers.length === 0) {
+      console.log('⚠️ [ROBIN ROUND] Nenhum entregador disponível')
+      return null
+    }
 
     // Filtrar apenas entregadores online para Robin Round
     const onlineDrivers = drivers.filter(d => d.is_online)
@@ -376,6 +419,16 @@ export function DeliveryDriverSelector({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Debug Info (remover em produção) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
+          <div>🔍 Debug: {drivers.length} entregadores carregados</div>
+          <div>👤 Usuário: {user?.id}</div>
+          <div>🔄 Loading: {loading ? 'Sim' : 'Não'}</div>
+          <div>⚙️ Modo: {isAutomatic ? 'Automático' : 'Manual'}</div>
         </div>
       )}
     </div>
