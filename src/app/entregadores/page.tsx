@@ -3,9 +3,52 @@
 import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { DriversManagement } from '@/components/drivers/DriversManagement'
+import { ActiveDriverSelector } from '@/components/orders/ActiveDriverSelector'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useEffect } from 'react'
 
 export default function EntregadoresPage() {
   const { user, loading } = useAuth()
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+
+  // Sincronizar com localStorage
+  useEffect(() => {
+    const loadSelectedDriver = () => {
+      try {
+        const stored = localStorage.getItem('selectedDriverId')
+        if (stored) {
+          setSelectedDriverId(stored)
+        }
+      } catch (error) {
+        console.log('Erro ao carregar entregador selecionado:', error)
+      }
+    }
+
+    loadSelectedDriver()
+
+    // Escutar mudanças no localStorage
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'selectedDriverId') {
+        setSelectedDriverId(e.newValue)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
+  const handleDriverSelection = (driverId: string | null) => {
+    setSelectedDriverId(driverId)
+    try {
+      if (driverId) {
+        localStorage.setItem('selectedDriverId', driverId)
+      } else {
+        localStorage.removeItem('selectedDriverId')
+      }
+    } catch (error) {
+      console.log('Erro ao salvar entregador selecionado:', error)
+    }
+  }
 
   if (loading) {
     return (
@@ -24,5 +67,28 @@ export default function EntregadoresPage() {
     return <LoginForm />
   }
 
-  return <DriversManagement />
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto space-y-8">
+          
+          {/* Componente de Seleção de Entregador */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader>
+              <CardTitle>Distribuição de Entregadores</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ActiveDriverSelector
+                onDriverSelect={handleDriverSelection}
+                selectedDriverId={selectedDriverId || undefined}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Lista de Entregadores */}
+          <DriversManagement />
+        </div>
+      </div>
+    </div>
+  )
 }

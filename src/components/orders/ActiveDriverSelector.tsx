@@ -33,6 +33,42 @@ export function ActiveDriverSelector({
   const [activeDrivers, setActiveDrivers] = useState<ActiveDriver[]>([])
   const [loading, setLoading] = useState(true)
   const [roundRobinIndex, setRoundRobinIndex] = useState(0)
+  const [internalSelectedDriverId, setInternalSelectedDriverId] = useState<string | null>(null)
+
+  // Sincronizar com localStorage para selectedDriverId
+  useEffect(() => {
+    const loadSelectedDriver = () => {
+      try {
+        const stored = localStorage.getItem('selectedDriverId')
+        if (stored && stored !== internalSelectedDriverId) {
+          setInternalSelectedDriverId(stored)
+          onDriverSelect(stored)
+        }
+      } catch (error) {
+        console.log('Erro ao carregar entregador selecionado:', error)
+      }
+    }
+
+    loadSelectedDriver()
+
+    // Escutar mudanças no localStorage
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'selectedDriverId' && e.newValue !== internalSelectedDriverId) {
+        setInternalSelectedDriverId(e.newValue)
+        onDriverSelect(e.newValue)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [internalSelectedDriverId, onDriverSelect])
+
+  // Atualizar estado interno quando prop muda
+  useEffect(() => {
+    if (selectedDriverId !== internalSelectedDriverId) {
+      setInternalSelectedDriverId(selectedDriverId || null)
+    }
+  }, [selectedDriverId, internalSelectedDriverId])
 
   // Memoizar função para evitar re-renders
   const getNextDriverRoundRobin = useCallback((): ActiveDriver | null => {
@@ -71,7 +107,7 @@ export function ActiveDriverSelector({
     }
   }, [])
 
-  // NOVO: Salvar estado automático
+  // Salvar estado automático
   const saveAutomaticState = useCallback((automatic: boolean) => {
     try {
       localStorage.setItem('automaticDriverSelection', automatic.toString())
@@ -82,7 +118,7 @@ export function ActiveDriverSelector({
     }
   }, [])
 
-  // NOVO: Carregar estado automático
+  // Carregar estado automático
   const loadAutomaticState = useCallback(() => {
     try {
       const stored = localStorage.getItem('automaticDriverSelection')
@@ -188,7 +224,7 @@ export function ActiveDriverSelector({
     if (user) {
       loadActiveDrivers()
       loadRoundRobinIndex()
-      loadAutomaticState() // NOVO: Carregar estado automático
+      loadAutomaticState()
     }
   }, [user, loadActiveDrivers, loadRoundRobinIndex, loadAutomaticState])
 
@@ -199,30 +235,43 @@ export function ActiveDriverSelector({
       if (nextDriver) {
         const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
         saveRoundRobinIndex(nextIndex)
-        onDriverSelect(nextDriver.id)
+        handleDriverSelection(nextDriver.id)
       }
     }
-  }, [isAutomatic, activeDrivers.length]) // Removido getNextDriverRoundRobin das dependências
+  }, [isAutomatic, activeDrivers.length])
 
   const handleAutomaticToggle = useCallback(() => {
     const newAutomatic = !isAutomatic
-    saveAutomaticState(newAutomatic) // MODIFICADO: Usar função que salva no localStorage
+    saveAutomaticState(newAutomatic)
     
     console.log(`🔄 [MODE] Modo ${newAutomatic ? 'automático' : 'manual'} ativado`)
-    
-    // REMOVIDO: Não limpa seleção quando desativa automático
-    // O botão só desliga manualmente, mantém estado atual
   }, [isAutomatic, saveAutomaticState])
 
-  const handleManualDriverSelect = useCallback((driverId: string) => {
+  const handleDriverSelection = useCallback((driverId: string | null) => {
+    setInternalSelectedDriverId(driverId)
     onDriverSelect(driverId)
-    console.log(`👤 [MANUAL] Entregador selecionado: ${driverId}`)
+    
+    // Sincronizar com localStorage
+    try {
+      if (driverId) {
+        localStorage.setItem('selectedDriverId', driverId)
+      } else {
+        localStorage.removeItem('selectedDriverId')
+      }
+    } catch (error) {
+      console.log('Erro ao salvar entregador selecionado:', error)
+    }
+    
+    console.log(`👤 [DRIVER SELECTION] Entregador selecionado: ${driverId}`)
   }, [onDriverSelect])
 
   // Calcular próximo entregador para exibição (sem efeitos colaterais)
   const nextDriverForDisplay = isAutomatic && activeDrivers.length > 0 
     ? activeDrivers[(roundRobinIndex + 1) % activeDrivers.length] 
     : null
+
+  // Usar estado interno ou prop
+  const currentSelectedDriverId = internalSelectedDriverId || selectedDriverId
 
   return (
     <div className="space-y-4">
@@ -287,8 +336,8 @@ export function ActiveDriverSelector({
       {!isAutomatic && (
         <div className="space-y-3">
           <Select 
-            value={selectedDriverId || ''} 
-            onValueChange={handleManualDriverSelect}
+            value={currentSelectedDriverId || ''} 
+            onValueChange={handleDriverSelection}
             disabled={disabled || loading}
           >
             <SelectTrigger className="rounded-xl h-12 border-2 border-gray-200 hover:border-blue-300 transition-colors">
@@ -365,7 +414,7 @@ export function ActiveDriverSelector({
           <div>🔍 Entregadores ativos: {activeDrivers.length}</div>
           <div>🔄 Modo: {isAutomatic ? 'Automático' : 'Manual'}</div>
           <div>📋 Índice Round Robin: {roundRobinIndex}</div>
-          <div>👤 Selecionado: {selectedDriverId || 'Nenhum'}</div>
+          <div>👤 Selecionado: {currentSelectedDriverId || 'Nenhum'}</div>
         </div>
       )}
     </div>
