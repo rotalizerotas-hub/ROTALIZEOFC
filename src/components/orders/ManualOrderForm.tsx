@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -77,6 +77,7 @@ export function ManualOrderForm() {
   // Estados para novos itens
   const [newProductName, setNewProductName] = useState('')
   const [newProductPrice, setNewProductPrice] = useState(0)
+  const [newProductPriceDisplay, setNewProductPriceDisplay] = useState('')
   const [newItemQuantity, setNewItemQuantity] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState('')
 
@@ -97,6 +98,33 @@ export function ManualOrderForm() {
   useEffect(() => {
     loadInitialData()
   }, [user])
+
+  const formatCurrency = (value: string) => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '')
+    
+    // Se vazio, retorna vazio
+    if (!numbers) return ''
+    
+    // Converte para número e divide por 100 para ter centavos
+    const amount = parseInt(numbers) / 100
+    
+    // Formata como moeda brasileira
+    return amount.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  }
+
+  const handlePriceChange = (value: string) => {
+    const formatted = formatCurrency(value)
+    setNewProductPriceDisplay(formatted)
+    
+    // Converte de volta para número
+    const numbers = value.replace(/\D/g, '')
+    const amount = numbers ? parseInt(numbers) / 100 : 0
+    setNewProductPrice(amount)
+  }
 
   const loadInitialData = async () => {
     if (!user) return
@@ -210,6 +238,7 @@ export function ManualOrderForm() {
       setOrderItems([...orderItems, newItem])
       setNewProductName('')
       setNewProductPrice(0)
+      setNewProductPriceDisplay('')
       setNewItemQuantity(1)
     }
   }
@@ -614,15 +643,15 @@ export function ManualOrderForm() {
                         placeholder="Nome do produto"
                         className="rounded-xl flex-1"
                       />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newProductPrice}
-                        onChange={(e) => setNewProductPrice(parseFloat(e.target.value) || 0)}
-                        placeholder="Preço"
-                        className="rounded-xl w-24"
-                      />
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <Input
+                          value={newProductPriceDisplay}
+                          onChange={(e) => handlePriceChange(e.target.value)}
+                          placeholder="0,00"
+                          className="rounded-xl w-32 pl-10 text-right font-mono"
+                        />
+                      </div>
                       <Input
                         type="number"
                         min="1"
@@ -632,6 +661,9 @@ export function ManualOrderForm() {
                         placeholder="Qtd"
                       />
                     </div>
+                    <p className="text-xs text-gray-500">
+                      Digite apenas números. Ex: 1250 = R$ 12,50
+                    </p>
                   </div>
 
                   <Button
