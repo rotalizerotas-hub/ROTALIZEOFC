@@ -1,266 +1,281 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import mapboxgl from 'mapbox-gl'
+import 'mapbox-gl/dist/mapbox-gl.css'
 
-// Tipos flexíveis que aceitam tanto Order quanto DeliveryOrder
-interface MapOrder {
-  id: string
-  latitude?: number
-  longitude?: number
-  delivery_latitude?: number
-  delivery_longitude?: number
-  customer_name?: string
-  customerName?: string
-  status: string
-  establishment_type_id?: string
-  orderNumber?: string
-}
+// Token público do Mapbox fornecido
+mapboxgl.accessToken = 'pk.eyJ1Ijoicm90YWxpemVvZmljaWFsIiwiYSI6ImNtaHdidmV2dTA1dTgya3B0dGNzZ2Q4ZHUifQ.1kJiJcybFKIyF_0rpNHmbA'
 
 interface MapboxMapProps {
-  orders?: MapOrder[]
-  centerLat?: number
-  centerLng?: number
-  zoom?: number
-  onOrderClick?: (orderId: string) => void
+  organizations?: Array<{
+    id: string
+    name: string
+    latitude: number
+    longitude: number
+    establishment_type: {
+      name: string
+      icon_url: string
+      emoji: string
+    }
+  }>
+  orders?: Array<{
+    id: string
+    customer_name: string
+    delivery_latitude: number
+    delivery_longitude: number
+    status: string
+  }>
   className?: string
 }
 
-const getStatusColor = (status: string): string => {
-  const colors = {
-    pending: '#ffd93d',
-    assigned: '#6c5ce7',
-    in_transit: '#fd79a8',
-    delivered: '#00b894',
-    cancelled: '#ddd'
-  }
-  return colors[status as keyof typeof colors] || '#ffd93d'
-}
-
-const getEstablishmentEmoji = (establishmentTypeId?: string): string => {
-  const emojis = {
-    'restaurant': '🍕',
-    'pharmacy': '💊',
-    'grocery': '🛒',
-    'retail': '🛍️',
-    'other': '📦'
-  }
-  return emojis[establishmentTypeId as keyof typeof emojis] || '📦'
-}
-
-// Função para validar coordenadas
-const isValidCoordinate = (lat?: number, lng?: number): boolean => {
-  return (
-    typeof lat === 'number' && 
-    typeof lng === 'number' && 
-    !isNaN(lat) && 
-    !isNaN(lng) && 
-    isFinite(lat) && 
-    isFinite(lng) &&
-    lat >= -90 && 
-    lat <= 90 && 
-    lng >= -180 && 
-    lng <= 180
-  )
-}
-
-// Função para extrair coordenadas de diferentes formatos
-const extractCoordinates = (order: MapOrder): { lat: number; lng: number } | null => {
-  // Tentar delivery_latitude/delivery_longitude primeiro
-  if (isValidCoordinate(order.delivery_latitude, order.delivery_longitude)) {
-    return { lat: order.delivery_latitude!, lng: order.delivery_longitude! }
+// Função helper para traduzir status
+const getStatusText = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    pending: 'Pendente',
+    assigned: 'Atribuído',
+    in_transit: 'Em trânsito',
+    delivered: 'Entregue',
+    cancelled: 'Cancelado'
   }
   
-  // Tentar latitude/longitude
-  if (isValidCoordinate(order.latitude, order.longitude)) {
-    return { lat: order.latitude!, lng: order.longitude! }
-  }
-  
-  return null
+  return statusMap[status] || status
 }
 
-// Função para extrair nome do cliente
-const extractCustomerName = (order: MapOrder): string => {
-  return order.customer_name || order.customerName || 'Cliente não identificado'
-}
-
-export function MapboxMap({ 
-  orders = [], 
-  centerLat = -19.9167, 
-  centerLng = -43.9345, 
-  zoom = 12,
-  onOrderClick,
-  className = '' 
-}: MapboxMapProps) {
+export function MapboxMap({ organizations = [], orders = [], className = '' }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
-  const [mapLoaded, setMapLoaded] = useState(false)
+  const map = useRef<mapboxgl.Map | null>(null)
+  const [lng] = useState(-44.5550) // Longitude central de Minas Gerais
+  const [lat] = useState(-18.5122) // Latitude central de Minas Gerais
+  const [zoom] = useState(10)
 
   useEffect(() => {
-    // Simular carregamento do mapa
-    const timer = setTimeout(() => {
-      setMapLoaded(true)
-      console.log('🗺️ [MAPBOX] Mapa simulado carregado')
-    }, 1000)
+    if (map.current) return // Inicializar mapa apenas uma vez
 
-    return () => clearTimeout(timer)
-  }, [])
+    if (mapContainer.current) {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [lng, lat],
+        zoom: zoom,
+        attributionControl: false,
+      })
 
-  const handleMarkerClick = (orderId: string) => {
-    console.log('🖱️ [MAPBOX] Marcador clicado:', orderId)
-    if (onOrderClick) {
-      onOrderClick(orderId)
+      // Adicionar controles de navegação
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
+
+      // Personalizar estilo do mapa
+      map.current.on('load', () => {
+        if (map.current) {
+          // Adicionar fonte de dados para organizações
+          map.current.addSource('organizations', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: organizations.map(org => ({
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [org.longitude, org.latitude]
+                },
+                properties: {
+                  id: org.id,
+                  name: org.name,
+                  type: org.establishment_type.name,
+                  emoji: org.establishment_type.emoji,
+                  icon_url: org.establishment_type.icon_url
+                }
+              }))
+            }
+          })
+
+          // Adicionar camada para organizações
+          map.current.addLayer({
+            id: 'organizations',
+            type: 'circle',
+            source: 'organizations',
+            paint: {
+              'circle-radius': 12,
+              'circle-color': [
+                'case',
+                ['==', ['get', 'type'], 'Pizzaria'], '#ff6b6b',
+                ['==', ['get', 'type'], 'Hamburgueria'], '#4ecdc4',
+                ['==', ['get', 'type'], 'Farmácia'], '#45b7d1',
+                ['==', ['get', 'type'], 'Supermercado'], '#96ceb4',
+                '#6c5ce7' // cor padrão
+              ],
+              'circle-stroke-width': 3,
+              'circle-stroke-color': '#ffffff',
+              'circle-opacity': 0.9
+            }
+          })
+
+          // Adicionar fonte de dados para pedidos
+          map.current.addSource('orders', {
+            type: 'geojson',
+            data: {
+              type: 'FeatureCollection',
+              features: orders.map(order => ({
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [order.delivery_longitude, order.delivery_latitude]
+                },
+                properties: {
+                  id: order.id,
+                  customer_name: order.customer_name,
+                  status: order.status
+                }
+              }))
+            }
+          })
+
+          // Adicionar camada para pedidos
+          map.current.addLayer({
+            id: 'orders',
+            type: 'circle',
+            source: 'orders',
+            paint: {
+              'circle-radius': 8,
+              'circle-color': [
+                'case',
+                ['==', ['get', 'status'], 'pending'], '#ffd93d',
+                ['==', ['get', 'status'], 'assigned'], '#6c5ce7',
+                ['==', ['get', 'status'], 'in_transit'], '#fd79a8',
+                ['==', ['get', 'status'], 'delivered'], '#00b894',
+                '#ddd' // cancelado
+              ],
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff',
+              'circle-opacity': 0.8
+            }
+          })
+
+          // Adicionar popups para organizações
+          map.current.on('click', 'organizations', (e) => {
+            if (e.features && e.features[0]) {
+              const feature = e.features[0]
+              const coordinates = (feature.geometry as any).coordinates.slice()
+              const properties = feature.properties
+              
+              if (properties) {
+                const { name, type, emoji } = properties
+
+                new mapboxgl.Popup()
+                  .setLngLat(coordinates)
+                  .setHTML(`
+                    <div class="p-3">
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="text-2xl">${emoji || '🏪'}</span>
+                        <h3 class="font-semibold text-gray-800">${name || 'Estabelecimento'}</h3>
+                      </div>
+                      <p class="text-sm text-gray-600">${type || 'Tipo não informado'}</p>
+                    </div>
+                  `)
+                  .addTo(map.current!)
+              }
+            }
+          })
+
+          // Adicionar popups para pedidos
+          map.current.on('click', 'orders', (e) => {
+            if (e.features && e.features[0]) {
+              const feature = e.features[0]
+              const coordinates = (feature.geometry as any).coordinates.slice()
+              const properties = feature.properties
+              
+              if (properties) {
+                const { customer_name, status } = properties
+                const statusText = getStatusText(status || 'unknown')
+
+                new mapboxgl.Popup()
+                  .setLngLat(coordinates)
+                  .setHTML(`
+                    <div class="p-3">
+                      <h3 class="font-semibold text-gray-800 mb-1">${customer_name || 'Cliente'}</h3>
+                      <p class="text-sm text-gray-600">Status: ${statusText}</p>
+                    </div>
+                  `)
+                  .addTo(map.current!)
+              }
+            }
+          })
+
+          // Cursor pointer nos pontos
+          map.current.on('mouseenter', 'organizations', () => {
+            if (map.current) map.current.getCanvas().style.cursor = 'pointer'
+          })
+          map.current.on('mouseleave', 'organizations', () => {
+            if (map.current) map.current.getCanvas().style.cursor = ''
+          })
+          map.current.on('mouseenter', 'orders', () => {
+            if (map.current) map.current.getCanvas().style.cursor = 'pointer'
+          })
+          map.current.on('mouseleave', 'orders', () => {
+            if (map.current) map.current.getCanvas().style.cursor = ''
+          })
+        }
+      })
     }
-    
-    const order = orders.find(o => o.id === orderId)
-    if (order) {
-      const customerName = extractCustomerName(order)
-      toast.success(`Pedido selecionado: ${customerName}`)
-    }
-  }
 
-  const handleAssumeRoute = (orderId: string) => {
-    console.log('🚀 [ROUTE] Assumindo rota para:', orderId)
-    const order = orders.find(o => o.id === orderId)
-    if (order) {
-      const customerName = extractCustomerName(order)
-      toast.success(`Rota assumida para ${customerName}! 🗺️`)
-    }
-  }
-
-  // Processar pedidos com coordenadas válidas
-  const validOrders = orders
-    .map(order => {
-      const coords = extractCoordinates(order)
-      if (!coords) return null
-      
-      return {
-        ...order,
-        latitude: coords.lat,
-        longitude: coords.lng,
-        customerName: extractCustomerName(order),
-        categoryEmoji: getEstablishmentEmoji(order.establishment_type_id)
+    return () => {
+      if (map.current) {
+        map.current.remove()
+        map.current = null
       }
-    })
-    .filter(Boolean) as Array<{
-      id: string
-      latitude: number
-      longitude: number
-      customerName: string
-      status: string
-      categoryEmoji: string
-      orderNumber?: string
-    }>
+    }
+  }, [lng, lat, zoom])
+
+  // Atualizar dados quando props mudarem
+  useEffect(() => {
+    if (map.current && map.current.isStyleLoaded()) {
+      const organizationsSource = map.current.getSource('organizations') as mapboxgl.GeoJSONSource
+      if (organizationsSource) {
+        organizationsSource.setData({
+          type: 'FeatureCollection',
+          features: organizations.map(org => ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [org.longitude, org.latitude]
+            },
+            properties: {
+              id: org.id,
+              name: org.name,
+              type: org.establishment_type.name,
+              emoji: org.establishment_type.emoji,
+              icon_url: org.establishment_type.icon_url
+            }
+          }))
+        })
+      }
+
+      const ordersSource = map.current.getSource('orders') as mapboxgl.GeoJSONSource
+      if (ordersSource) {
+        ordersSource.setData({
+          type: 'FeatureCollection',
+          features: orders.map(order => ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [order.delivery_longitude, order.delivery_latitude]
+            },
+            properties: {
+              id: order.id,
+              customer_name: order.customer_name,
+              status: order.status
+            }
+          }))
+        })
+      }
+    }
+  }, [organizations, orders])
 
   return (
-    <div className={`relative w-full h-full rounded-2xl shadow-lg overflow-hidden bg-gray-100 ${className}`}>
-      {/* Simulação do mapa */}
-      <div 
-        ref={mapContainer} 
-        className="w-full h-full bg-gradient-to-br from-green-100 to-blue-100 flex items-center justify-center"
-        style={{ minHeight: '400px' }}
-      >
-        {!mapLoaded ? (
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Carregando Mapbox...</p>
-          </div>
-        ) : (
-          <div className="text-center">
-            <div className="text-4xl mb-2">🗺️</div>
-            <p className="text-gray-600 mb-2 font-semibold">Mapa Simulado</p>
-            <p className="text-xs text-gray-500 mb-4">Coordenadas: {centerLat.toFixed(4)}, {centerLng.toFixed(4)}</p>
-            
-            {/* Mostrar informações dos marcadores */}
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 max-w-sm shadow-lg">
-              {validOrders.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                    📍 Pedidos no Mapa
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                      {validOrders.length}
-                    </span>
-                  </h4>
-                  {validOrders.slice(0, 5).map((order, index) => (
-                    <div 
-                      key={order.id}
-                      className="flex items-center gap-3 p-3 bg-white rounded-lg mb-2 cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
-                      onClick={() => handleMarkerClick(order.id)}
-                    >
-                      <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
-                        style={{ backgroundColor: getStatusColor(order.status) }}
-                      >
-                        {order.categoryEmoji}
-                      </div>
-                      <div className="text-left flex-1">
-                        <div className="font-medium text-sm">{order.customerName}</div>
-                        <div className="text-xs text-gray-500">
-                          {order.orderNumber ? `#${order.orderNumber}` : `Pedido ${index + 1}`}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {order.latitude.toFixed(4)}, {order.longitude.toFixed(4)}
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleAssumeRoute(order.id)
-                        }}
-                        className="bg-gradient-to-r from-green-500 to-green-600 text-white px-3 py-1 rounded-lg text-xs hover:from-green-600 hover:to-green-700 transition-all shadow-sm"
-                      >
-                        🚀 Assumir
-                      </button>
-                    </div>
-                  ))}
-                  {validOrders.length > 5 && (
-                    <p className="text-xs text-gray-500 text-center mt-2">
-                      +{validOrders.length - 5} pedidos adicionais
-                    </p>
-                  )}
-                </div>
-              )}
-              
-              {validOrders.length === 0 && (
-                <p className="text-gray-500 text-sm">Nenhum marcador para exibir</p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Controles do mapa */}
-      <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-2">
-        <div className="flex flex-col gap-1">
-          <button className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center text-sm font-bold transition-colors">
-            +
-          </button>
-          <button className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded flex items-center justify-center text-sm font-bold transition-colors">
-            -
-          </button>
-        </div>
-      </div>
-      
-      {/* Informações de coordenadas */}
-      {centerLat && centerLng && (
-        <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-blue-600">📍</span>
-            <span className="font-mono">
-              {centerLat.toFixed(4)}, {centerLng.toFixed(4)}
-            </span>
-            <span className="text-gray-400">|</span>
-            <span className="text-green-600">🔍</span>
-            <span className="font-mono">
-              Zoom: {zoom}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Badge do Mapbox */}
-      <div className="absolute bottom-4 right-4 bg-black/80 text-white px-2 py-1 rounded text-xs">
-        Mapbox Simulado
-      </div>
-    </div>
+    <div 
+      ref={mapContainer} 
+      className={`w-full h-full rounded-2xl shadow-lg overflow-hidden ${className}`}
+      style={{ minHeight: '400px' }}
+    />
   )
 }

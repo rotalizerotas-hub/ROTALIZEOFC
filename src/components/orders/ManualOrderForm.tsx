@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearch } from '@/components/map/AddressSearch'
-import { MapboxMap } from '@/components/map/MapboxMap'
+import { EnhancedMapbox } from '@/components/map/EnhancedMapbox'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin } from 'lucide-react'
@@ -392,6 +392,7 @@ export function ManualOrderForm() {
     longitude: addressCoordinates.longitude,
     customerName: form.watch('customer_name') || 'Novo Pedido',
     status: 'pending',
+    categoryIcon: selectedEstablishmentType.icon_url,
     categoryEmoji: selectedEstablishmentType.emoji,
     orderNumber: form.watch('order_number')
   }] : []
@@ -540,14 +541,14 @@ export function ManualOrderForm() {
                 </div>
               </div>
 
-              {/* Mapa Mapbox Real */}
+              {/* Mapa */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
                   Localização no Mapa
                 </Label>
                 <div className="h-96 rounded-2xl overflow-hidden border border-gray-200">
-                  <MapboxMap
+                  <EnhancedMapbox
                     orders={mapOrders}
                     centerLat={addressCoordinates?.latitude}
                     centerLng={addressCoordinates?.longitude}

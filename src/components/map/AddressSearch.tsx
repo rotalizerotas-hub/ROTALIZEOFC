@@ -24,55 +24,6 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
 
-  const createAddressFromText = (query: string) => {
-    console.log('🔄 [ADDRESS] Processando texto:', query)
-    
-    const addressParts = query.split(',').map(s => s.trim())
-    let street = 'Rua Exemplo'
-    let number = '100'
-    let neighborhood = 'Centro'
-    let city = 'Belo Horizonte'
-    
-    // Tentar extrair informações do texto
-    if (addressParts.length >= 1) {
-      const firstPart = addressParts[0]
-      const numberMatch = firstPart.match(/^(.+?)\s+(\d+)/)
-      if (numberMatch) {
-        street = numberMatch[1]
-        number = numberMatch[2]
-      } else {
-        street = firstPart
-      }
-    }
-    
-    if (addressParts.length >= 2) {
-      neighborhood = addressParts[1]
-    }
-    
-    if (addressParts.length >= 3) {
-      city = addressParts[2]
-    }
-
-    // Coordenadas de Belo Horizonte com variação baseada no endereço
-    const hash = query.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0)
-      return a & a
-    }, 0)
-    
-    const latitude = -19.9167 + (hash % 1000) / 100000
-    const longitude = -43.9345 + (hash % 1000) / 100000
-
-    return {
-      fullAddress: query,
-      street: street,
-      number: number,
-      neighborhood: neighborhood,
-      city: city,
-      latitude: latitude,
-      longitude: longitude
-    }
-  }
-
   const searchAddress = async () => {
     if (!searchQuery.trim()) {
       toast.error('Digite um endereço para buscar')
@@ -82,20 +33,66 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
     setIsSearching(true)
 
     try {
-      console.log('🔍 [ADDRESS] Iniciando busca para:', searchQuery)
+      console.log('🔍 [ADDRESS] Buscando endereço:', searchQuery)
 
-      // Simular delay de busca
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Usar Google Maps Geocoding API
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      )
 
-      const addressData = createAddressFromText(searchQuery)
+      if (!response.ok) {
+        throw new Error('Erro na busca do endereço')
+      }
 
-      console.log('✅ [ADDRESS] Endereço criado:', addressData)
+      const data = await response.json()
+
+      if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+        throw new Error('Endereço não encontrado')
+      }
+
+      const result = data.results[0]
+      const { geometry, formatted_address, address_components } = result
+
+      console.log('📍 [ADDRESS] Resultado encontrado:', result)
+
+      // Extrair componentes do endereço
+      let street = ''
+      let number = ''
+      let neighborhood = ''
+      let city = ''
+
+      address_components.forEach((component: any) => {
+        const types = component.types
+
+        if (types.includes('route')) {
+          street = component.long_name
+        } else if (types.includes('street_number')) {
+          number = component.long_name
+        } else if (types.includes('sublocality') || types.includes('neighborhood')) {
+          neighborhood = component.long_name
+        } else if (types.includes('administrative_area_level_2') || types.includes('locality')) {
+          city = component.long_name
+        }
+      })
+
+      const addressData = {
+        fullAddress: formatted_address,
+        street: street || 'Rua não identificada',
+        number: number || 'S/N',
+        neighborhood: neighborhood || 'Bairro não identificado',
+        city: city || 'Cidade não identificada',
+        latitude: geometry.location.lat,
+        longitude: geometry.location.lng
+      }
+
+      console.log('✅ [ADDRESS] Dados processados:', addressData)
+
       onAddressFound(addressData)
-      toast.success('Endereço localizado!')
+      toast.success('Endereço encontrado!')
 
     } catch (error) {
       console.error('❌ [ADDRESS] Erro na busca:', error)
-      toast.error('Erro ao buscar endereço')
+      toast.error('Erro ao buscar endereço. Tente novamente.')
     } finally {
       setIsSearching(false)
     }
