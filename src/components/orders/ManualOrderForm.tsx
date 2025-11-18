@@ -632,8 +632,6 @@ export function ManualOrderForm() {
                     </div>
                   )}
 
-                  <div className="text-center text-gray-500">ou</div>
-
                   <div className="space-y-2">
                     <Label>Novo Produto</Label>
                     <div className="flex gap-2">
