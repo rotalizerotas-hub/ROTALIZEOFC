@@ -35,27 +35,84 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
     try {
       console.log('🔍 [ADDRESS] Buscando endereço:', searchQuery)
 
-      // Usar Google Maps Geocoding API
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      )
-
-      if (!response.ok) {
-        throw new Error('Erro na busca do endereço')
+      // Verificar se a API key está configurada
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (!apiKey) {
+        console.warn('⚠️ [ADDRESS] Google Maps API Key não configurada, usando coordenadas simuladas')
+        
+        // Simular resultado para desenvolvimento
+        const simulatedResult = {
+          fullAddress: searchQuery,
+          street: 'Rua Exemplo',
+          number: '123',
+          neighborhood: 'Centro',
+          city: 'Belo Horizonte',
+          latitude: -19.9167 + (Math.random() - 0.5) * 0.01,
+          longitude: -43.9345 + (Math.random() - 0.5) * 0.01
+        }
+        
+        onAddressFound(simulatedResult)
+        toast.success('Endereço encontrado! (Modo desenvolvimento)')
+        return
       }
 
-      const data = await response.json()
+      // Melhorar a query de busca
+      const encodedQuery = encodeURIComponent(searchQuery.trim())
+      
+      // Usar múltiplas tentativas com diferentes parâmetros
+      const searchAttempts = [
+        // Tentativa 1: Busca normal
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedQuery}&key=${apiKey}`,
+        
+        // Tentativa 2: Busca com região Brasil
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedQuery}&region=br&key=${apiKey}`,
+        
+        // Tentativa 3: Busca com componentes do Brasil
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedQuery}&components=country:BR&key=${apiKey}`
+      ]
 
-      if (data.status !== 'OK' || !data.results || data.results.length === 0) {
-        throw new Error('Endereço não encontrado')
+      let result = null
+      let lastError = null
+
+      for (const url of searchAttempts) {
+        try {
+          console.log('🔍 [ADDRESS] Tentativa de busca:', url.split('&key=')[0])
+          
+          const response = await fetch(url)
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const data = await response.json()
+          
+          console.log('📍 [ADDRESS] Resposta da API:', data)
+
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            result = data.results[0]
+            break
+          } else if (data.status === 'ZERO_RESULTS') {
+            console.log('⚠️ [ADDRESS] Nenhum resultado encontrado para esta tentativa')
+            continue
+          } else {
+            throw new Error(`API Error: ${data.status} - ${data.error_message || 'Erro desconhecido'}`)
+          }
+        } catch (error) {
+          console.log('❌ [ADDRESS] Erro nesta tentativa:', error)
+          lastError = error
+          continue
+        }
       }
 
-      const result = data.results[0]
+      if (!result) {
+        throw lastError || new Error('Nenhum endereço encontrado em todas as tentativas')
+      }
+
       const { geometry, formatted_address, address_components } = result
 
       console.log('📍 [ADDRESS] Resultado encontrado:', result)
 
-      // Extrair componentes do endereço
+      // Extrair componentes do endereço com mais flexibilidade
       let street = ''
       let number = ''
       let neighborhood = ''
@@ -64,16 +121,36 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
       address_components.forEach((component: any) => {
         const types = component.types
 
-        if (types.includes('route')) {
+        if (types.includes('route') && !street) {
           street = component.long_name
-        } else if (types.includes('street_number')) {
+        } else if (types.includes('street_number') && !number) {
           number = component.long_name
-        } else if (types.includes('sublocality') || types.includes('neighborhood')) {
+        } else if ((types.includes('sublocality') || types.includes('neighborhood') || types.includes('sublocality_level_1')) && !neighborhood) {
           neighborhood = component.long_name
-        } else if (types.includes('administrative_area_level_2') || types.includes('locality')) {
+        } else if ((types.includes('administrative_area_level_2') || types.includes('locality')) && !city) {
           city = component.long_name
         }
       })
+
+      // Fallback para extrair informações do endereço formatado se componentes estiverem vazios
+      if (!street || !city) {
+        const addressParts = formatted_address.split(',').map(part => part.trim())
+        
+        if (!street && addressParts.length > 0) {
+          const firstPart = addressParts[0]
+          const numberMatch = firstPart.match(/^(.+?)\s+(\d+)/)
+          if (numberMatch) {
+            street = numberMatch[1].trim()
+            if (!number) number = numberMatch[2]
+          } else {
+            street = firstPart
+          }
+        }
+        
+        if (!city && addressParts.length > 1) {
+          city = addressParts[addressParts.length - 2] || addressParts[addressParts.length - 1]
+        }
+      }
 
       const addressData = {
         fullAddress: formatted_address,
@@ -92,7 +169,23 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
 
     } catch (error) {
       console.error('❌ [ADDRESS] Erro na busca:', error)
-      toast.error('Erro ao buscar endereço. Tente novamente.')
+      
+      // Mensagem de erro mais específica
+      let errorMessage = 'Erro ao buscar endereço. '
+      
+      if (error instanceof Error) {
+        if (error.message.includes('API Error')) {
+          errorMessage += 'Problema com a API do Google Maps.'
+        } else if (error.message.includes('HTTP')) {
+          errorMessage += 'Problema de conexão.'
+        } else {
+          errorMessage += 'Tente um endereço mais específico.'
+        }
+      } else {
+        errorMessage += 'Tente novamente.'
+      }
+      
+      toast.error(errorMessage)
     } finally {
       setIsSearching(false)
     }
