@@ -1,5 +1,3 @@
-import "./globals.css";
-
 export default function RootLayout({
   children,
 }: {
@@ -7,7 +5,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>
+      <head>
+        <title>Rotalize - Sistema de Entregas</title>
+        <meta name="description" content="Sistema de gestão de entregas" />
+      </head>
+      <body style={{ margin: 0, padding: 0 }}>
         {children}
       </body>
     </html>
