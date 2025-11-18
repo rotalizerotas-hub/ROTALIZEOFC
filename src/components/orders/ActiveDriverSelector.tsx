@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
@@ -34,24 +34,44 @@ export function ActiveDriverSelector({
   const [loading, setLoading] = useState(true)
   const [roundRobinIndex, setRoundRobinIndex] = useState(0)
 
-  useEffect(() => {
-    if (user) {
-      loadActiveDrivers()
-      loadRoundRobinIndex()
+  // Memoizar função para evitar re-renders
+  const getNextDriverRoundRobin = useCallback((): ActiveDriver | null => {
+    if (activeDrivers.length === 0) {
+      console.log('⚠️ [ROUND ROBIN] Nenhum entregador ativo disponível')
+      return null
     }
-  }, [user])
 
-  useEffect(() => {
-    // Quando modo automático é ativado, selecionar próximo entregador
-    if (isAutomatic && activeDrivers.length > 0) {
-      const nextDriver = getNextDriverRoundRobin()
-      onDriverSelect(nextDriver?.id || null)
-    } else if (!isAutomatic) {
-      onDriverSelect(selectedDriverId || null)
+    // Round Robin: próximo entregador na fila
+    const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
+    const nextDriver = activeDrivers[nextIndex]
+    
+    console.log(`🔄 [ROUND ROBIN] Próximo entregador: ${nextDriver.profiles.full_name} (índice: ${nextIndex})`)
+    return nextDriver
+  }, [activeDrivers, roundRobinIndex])
+
+  const saveRoundRobinIndex = useCallback((index: number) => {
+    try {
+      localStorage.setItem('roundRobinDriverIndex', index.toString())
+      setRoundRobinIndex(index)
+      console.log('💾 [ROUND ROBIN] Índice salvo:', index)
+    } catch (error) {
+      console.log('⚠️ [ROUND ROBIN] Erro ao salvar índice:', error)
     }
-  }, [isAutomatic, activeDrivers])
+  }, [])
 
-  const loadActiveDrivers = async () => {
+  const loadRoundRobinIndex = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('roundRobinDriverIndex')
+      if (stored) {
+        setRoundRobinIndex(parseInt(stored, 10))
+        console.log('📋 [ROUND ROBIN] Índice carregado:', stored)
+      }
+    } catch (error) {
+      console.log('⚠️ [ROUND ROBIN] Erro ao carregar índice:', error)
+    }
+  }, [])
+
+  const loadActiveDrivers = useCallback(async () => {
     if (!user) return
 
     try {
@@ -136,62 +156,49 @@ export function ActiveDriverSelector({
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
-  const loadRoundRobinIndex = () => {
-    try {
-      const stored = localStorage.getItem('roundRobinDriverIndex')
-      if (stored) {
-        setRoundRobinIndex(parseInt(stored, 10))
-        console.log('📋 [ROUND ROBIN] Índice carregado:', stored)
+  // Carregar dados iniciais apenas uma vez
+  useEffect(() => {
+    if (user) {
+      loadActiveDrivers()
+      loadRoundRobinIndex()
+    }
+  }, [user, loadActiveDrivers, loadRoundRobinIndex])
+
+  // Gerenciar seleção automática apenas quando necessário
+  useEffect(() => {
+    if (isAutomatic && activeDrivers.length > 0) {
+      const nextDriver = getNextDriverRoundRobin()
+      if (nextDriver) {
+        const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
+        saveRoundRobinIndex(nextIndex)
+        onDriverSelect(nextDriver.id)
       }
-    } catch (error) {
-      console.log('⚠️ [ROUND ROBIN] Erro ao carregar índice:', error)
     }
-  }
+  }, [isAutomatic, activeDrivers.length]) // Removido getNextDriverRoundRobin das dependências
 
-  const saveRoundRobinIndex = (index: number) => {
-    try {
-      localStorage.setItem('roundRobinDriverIndex', index.toString())
-      setRoundRobinIndex(index)
-      console.log('💾 [ROUND ROBIN] Índice salvo:', index)
-    } catch (error) {
-      console.log('⚠️ [ROUND ROBIN] Erro ao salvar índice:', error)
-    }
-  }
-
-  const getNextDriverRoundRobin = (): ActiveDriver | null => {
-    if (activeDrivers.length === 0) {
-      console.log('⚠️ [ROUND ROBIN] Nenhum entregador ativo disponível')
-      return null
-    }
-
-    // Round Robin: próximo entregador na fila
-    const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
-    const nextDriver = activeDrivers[nextIndex]
-    
-    saveRoundRobinIndex(nextIndex)
-    
-    console.log(`🔄 [ROUND ROBIN] Próximo entregador: ${nextDriver.profiles.full_name} (índice: ${nextIndex})`)
-    return nextDriver
-  }
-
-  const handleAutomaticToggle = () => {
+  const handleAutomaticToggle = useCallback(() => {
     const newAutomatic = !isAutomatic
     setIsAutomatic(newAutomatic)
     
     console.log(`🔄 [MODE] Modo ${newAutomatic ? 'automático' : 'manual'} ativado`)
     
-    if (newAutomatic && activeDrivers.length > 0) {
-      const nextDriver = getNextDriverRoundRobin()
-      onDriverSelect(nextDriver?.id || null)
+    if (!newAutomatic) {
+      // Se desativou automático, limpar seleção
+      onDriverSelect(selectedDriverId || null)
     }
-  }
+  }, [isAutomatic, onDriverSelect, selectedDriverId])
 
-  const handleManualDriverSelect = (driverId: string) => {
+  const handleManualDriverSelect = useCallback((driverId: string) => {
     onDriverSelect(driverId)
     console.log(`👤 [MANUAL] Entregador selecionado: ${driverId}`)
-  }
+  }, [onDriverSelect])
+
+  // Calcular próximo entregador para exibição (sem efeitos colaterais)
+  const nextDriverForDisplay = isAutomatic && activeDrivers.length > 0 
+    ? activeDrivers[(roundRobinIndex + 1) % activeDrivers.length] 
+    : null
 
   return (
     <div className="space-y-4">
@@ -228,7 +235,7 @@ export function ActiveDriverSelector({
       </div>
 
       {/* Modo Automático - Próximo Entregador */}
-      {isAutomatic && activeDrivers.length > 0 && (
+      {isAutomatic && activeDrivers.length > 0 && nextDriverForDisplay && (
         <div className="p-4 bg-green-50 rounded-xl border border-green-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center">
@@ -236,10 +243,10 @@ export function ActiveDriverSelector({
             </div>
             <div className="flex-1">
               <div className="font-medium text-green-900">
-                Próximo na fila: {getNextDriverRoundRobin()?.profiles.full_name || 'Calculando...'}
+                Próximo na fila: {nextDriverForDisplay.profiles.full_name}
               </div>
               <div className="text-sm text-green-700">
-                {getNextDriverRoundRobin()?.profiles.email || ''}
+                {nextDriverForDisplay.profiles.email}
               </div>
             </div>
             <div className="text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded-full">
@@ -331,6 +338,7 @@ export function ActiveDriverSelector({
           <div>🔍 Entregadores ativos: {activeDrivers.length}</div>
           <div>🔄 Modo: {isAutomatic ? 'Automático' : 'Manual'}</div>
           <div>📋 Índice Round Robin: {roundRobinIndex}</div>
+          <div>👤 Selecionado: {selectedDriverId || 'Nenhum'}</div>
         </div>
       )}
     </div>
