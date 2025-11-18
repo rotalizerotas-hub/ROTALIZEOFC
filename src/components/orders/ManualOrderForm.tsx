@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -25,6 +25,7 @@ const orderSchema = z.object({
   address_city: z.string().min(2, 'Cidade é obrigatória'),
   customer_name: z.string().min(2, 'Nome do cliente é obrigatório'),
   customer_id: z.string().optional(),
+  order_number: z.string().optional(), // NOVO CAMPO OPCIONAL
 })
 
 type OrderFormData = z.infer<typeof orderSchema>
@@ -89,6 +90,7 @@ export function ManualOrderForm() {
       address_city: '',
       customer_name: '',
       customer_id: '',
+      order_number: '', // NOVO CAMPO
     },
   })
 
@@ -226,10 +228,11 @@ export function ManualOrderForm() {
       return
     }
 
-    if (orderItems.length === 0) {
-      toast.error('Adicione pelo menos um item ao pedido')
-      return
-    }
+    // REMOVIDO: Validação obrigatória de itens
+    // if (orderItems.length === 0) {
+    //   toast.error('Adicione pelo menos um item ao pedido')
+    //   return
+    // }
 
     if (!selectedDriverId) {
       toast.error('Selecione um entregador responsável')
@@ -276,30 +279,33 @@ export function ManualOrderForm() {
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
           delivery_driver_id: selectedDriverId,
-          value: getTotalValue(),
+          value: getTotalValue(), // Pode ser 0 se não houver itens
           status: 'assigned', // Já atribuído ao entregador
-          is_manual: true
+          is_manual: true,
+          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null // SALVAR NÚMERO DO PEDIDO
         })
         .select()
         .single()
 
       if (orderError) throw orderError
 
-      // Criar itens do pedido
-      const orderItemsData = orderItems.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id || null,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price
-      }))
+      // Criar itens do pedido (apenas se houver itens)
+      if (orderItems.length > 0) {
+        const orderItemsData = orderItems.map(item => ({
+          order_id: order.id,
+          product_id: item.product_id || null,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price
+        }))
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItemsData)
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItemsData)
 
-      if (itemsError) throw itemsError
+        if (itemsError) throw itemsError
+      }
 
       // Criar eventos
       await supabase
@@ -308,7 +314,7 @@ export function ManualOrderForm() {
           {
             order_id: order.id,
             event_type: 'created',
-            description: `Pedido manual criado para ${data.customer_name}`
+            description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}`
           },
           {
             order_id: order.id,
@@ -470,7 +476,7 @@ export function ManualOrderForm() {
             </CardContent>
           </Card>
 
-          {/* NOVO COMPONENTE DE ENTREGADORES RESPONSÁVEL */}
+          {/* COMPONENTE DE ENTREGADORES RESPONSÁVEL */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
               <CardTitle>Entregador Responsável</CardTitle>
@@ -494,6 +500,23 @@ export function ManualOrderForm() {
             </CardHeader>
             <CardContent className="space-y-6">
               
+              {/* NOVO CAMPO: Número do Pedido */}
+              <div className="space-y-2">
+                <Label htmlFor="order_number" className="flex items-center gap-2">
+                  <Hash className="w-4 h-4" />
+                  Número do Pedido (Opcional)
+                </Label>
+                <Input
+                  id="order_number"
+                  {...form.register('order_number')}
+                  placeholder="Digite o número do pedido (ex: 12345)"
+                  className="rounded-xl"
+                />
+                <p className="text-xs text-gray-500">
+                  Campo opcional para identificar o pedido com um número específico
+                </p>
+              </div>
+
               {/* Nome do Cliente */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -541,9 +564,9 @@ export function ManualOrderForm() {
                 )}
               </div>
 
-              {/* Lista de Itens */}
+              {/* Lista de Itens (OPCIONAL) */}
               <div className="space-y-4">
-                <Label>Itens</Label>
+                <Label>Itens (Opcional)</Label>
                 
                 {/* Adicionar Item */}
                 <div className="border border-gray-200 rounded-xl p-4 space-y-4">
@@ -666,7 +689,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || orderItems.length === 0 || !selectedDriverId}
+              disabled={loading || !selectedDriverId} // REMOVIDO: orderItems.length === 0
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
