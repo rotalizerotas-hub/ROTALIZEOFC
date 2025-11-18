@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Users, Plus, MapPin, Trash2, Key } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Users, Plus, MapPin, Trash2, Key } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface DeliveryDriver {
@@ -30,7 +29,6 @@ interface DeliveryDriver {
 
 export function DriversManagement() {
   const { user } = useAuth()
-  const router = useRouter()
   const [drivers, setDrivers] = useState<DeliveryDriver[]>([])
   const [loading, setLoading] = useState(true)
   const [showNewDriverDialog, setShowNewDriverDialog] = useState(false)
@@ -499,115 +497,6 @@ export function DriversManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="ghost" 
-                onClick={() => router.back()}
-                className="rounded-xl"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                    Entregadores
-                  </h1>
-                  <p className="text-sm text-gray-600">Gerenciar entregadores</p>
-                </div>
-              </div>
-            </div>
-            
-            <Dialog open={showNewDriverDialog} onOpenChange={setShowNewDriverDialog}>
-              <DialogTrigger asChild>
-                <Button className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl">
-                  <Plus className="w-5 h-5 mr-2" />
-                  Novo Entregador
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Novo Entregador</DialogTitle>
-                  <DialogDescription>
-                    Criar conta de acesso para entregador
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="full_name">Nome Completo *</Label>
-                    <Input
-                      id="full_name"
-                      value={newDriverData.full_name}
-                      onChange={(e) => setNewDriverData(prev => ({ ...prev, full_name: e.target.value }))}
-                      placeholder="João Silva"
-                      className="rounded-xl"
-                      disabled={creatingDriver}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newDriverData.email}
-                      onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="joao@email.com"
-                      className="rounded-xl"
-                      disabled={creatingDriver}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Telefone</Label>
-                    <Input
-                      id="phone"
-                      value={newDriverData.phone}
-                      onChange={(e) => setNewDriverData(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="(31) 99999-9999"
-                      className="rounded-xl"
-                      disabled={creatingDriver}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Senha *</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={newDriverData.password}
-                      onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Senha sem espaços"
-                      className="rounded-xl"
-                      disabled={creatingDriver}
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowNewDriverDialog(false)}
-                      className="flex-1 rounded-xl"
-                      disabled={creatingDriver}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={createNewDriver}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
-                      disabled={creatingDriver}
-                    >
-                      {creatingDriver ? 'Criando...' : 'Criar'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
@@ -652,12 +541,98 @@ export function DriversManagement() {
 
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-xl font-semibold text-gray-800">
-              Lista de Entregadores
-            </CardTitle>
-            <CardDescription>
-              Gerencie entregadores e acompanhe status
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-semibold text-gray-800">
+                  Lista de Entregadores
+                </CardTitle>
+                <CardDescription>
+                  Gerencie entregadores e acompanhe status
+                </CardDescription>
+              </div>
+              
+              <Dialog open={showNewDriverDialog} onOpenChange={setShowNewDriverDialog}>
+                <DialogTrigger asChild>
+                  <Button className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl">
+                    <Plus className="w-5 h-5 mr-2" />
+                    Novo Entregador
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Novo Entregador</DialogTitle>
+                    <DialogDescription>
+                      Criar conta de acesso para entregador
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="full_name">Nome Completo *</Label>
+                      <Input
+                        id="full_name"
+                        value={newDriverData.full_name}
+                        onChange={(e) => setNewDriverData(prev => ({ ...prev, full_name: e.target.value }))}
+                        placeholder="João Silva"
+                        className="rounded-xl"
+                        disabled={creatingDriver}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={newDriverData.email}
+                        onChange={(e) => setNewDriverData(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="joao@email.com"
+                        className="rounded-xl"
+                        disabled={creatingDriver}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Telefone</Label>
+                      <Input
+                        id="phone"
+                        value={newDriverData.phone}
+                        onChange={(e) => setNewDriverData(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="(31) 99999-9999"
+                        className="rounded-xl"
+                        disabled={creatingDriver}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Senha *</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={newDriverData.password}
+                        onChange={(e) => setNewDriverData(prev => ({ ...prev, password: e.target.value }))}
+                        placeholder="Senha sem espaços"
+                        className="rounded-xl"
+                        disabled={creatingDriver}
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowNewDriverDialog(false)}
+                        className="flex-1 rounded-xl"
+                        disabled={creatingDriver}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        onClick={createNewDriver}
+                        className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                        disabled={creatingDriver}
+                      >
+                        {creatingDriver ? 'Criando...' : 'Criar'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">

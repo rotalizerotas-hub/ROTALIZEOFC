@@ -5,10 +5,14 @@ import { LoginForm } from '@/components/auth/LoginForm'
 import { DriversManagement } from '@/components/drivers/DriversManagement'
 import { ActiveDriverSelector } from '@/components/orders/ActiveDriverSelector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft, Users, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 export default function EntregadoresPage() {
   const { user, loading } = useAuth()
+  const router = useRouter()
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
 
   // Sincronizar com localStorage
@@ -69,6 +73,33 @@ export default function EntregadoresPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                onClick={() => router.back()}
+                className="rounded-xl"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+                    Entregadores
+                  </h1>
+                  <p className="text-sm text-gray-600">Gerenciar entregadores</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
           
