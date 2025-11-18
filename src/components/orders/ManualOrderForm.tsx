@@ -9,11 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, User, Package, Plus, Minus, UserPlus } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -23,7 +23,6 @@ const orderSchema = z.object({
   address_number: z.string().min(1, 'Número é obrigatório'),
   address_neighborhood: z.string().min(2, 'Bairro é obrigatório'),
   address_city: z.string().min(2, 'Cidade é obrigatória'),
-  delivery_driver_id: z.string().min(1, 'Selecione um entregador'),
   customer_name: z.string().min(2, 'Nome do cliente é obrigatório'),
   customer_id: z.string().optional(),
 })
@@ -35,14 +34,6 @@ interface EstablishmentType {
   name: string
   emoji: string
   icon_url: string
-}
-
-interface DeliveryDriver {
-  id: string
-  profiles: {
-    full_name: string
-  }
-  is_online: boolean
 }
 
 interface Customer {
@@ -74,12 +65,10 @@ export function ManualOrderForm() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [autoMode, setAutoMode] = useState(true)
-  const [currentDriverIndex, setCurrentDriverIndex] = useState(0)
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   
   // Estados para dados
   const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
-  const [deliveryDrivers, setDeliveryDrivers] = useState<DeliveryDriver[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
@@ -98,7 +87,6 @@ export function ManualOrderForm() {
       address_number: '',
       address_neighborhood: '',
       address_city: '',
-      delivery_driver_id: '',
       customer_name: '',
       customer_id: '',
     },
@@ -108,21 +96,11 @@ export function ManualOrderForm() {
     loadInitialData()
   }, [user])
 
-  useEffect(() => {
-    if (autoMode && deliveryDrivers.length > 0) {
-      const activeDrivers = deliveryDrivers.filter(d => d.is_online)
-      if (activeDrivers.length > 0) {
-        const selectedDriver = activeDrivers[currentDriverIndex % activeDrivers.length]
-        form.setValue('delivery_driver_id', selectedDriver.id)
-      }
-    }
-  }, [autoMode, deliveryDrivers, currentDriverIndex, form])
-
   const loadInitialData = async () => {
     if (!user) return
 
     try {
-      console.log('🔄 [FORM] Carregando dados iniciais...')
+      console.log('🔄 [MANUAL ORDER] Carregando dados iniciais...')
 
       // Carregar tipos de estabelecimento
       const { data: types } = await supabase
@@ -131,46 +109,17 @@ export function ManualOrderForm() {
         .order('name')
 
       setEstablishmentTypes(types || [])
-      console.log('🏪 [FORM] Tipos de estabelecimento:', types?.length || 0)
+      console.log('🏪 [MANUAL ORDER] Tipos de estabelecimento:', types?.length || 0)
 
-      // Carregar entregadores
+      // Carregar clientes
       const { data: userOrgs } = await supabase
         .from('user_organizations')
         .select('organization_id')
         .eq('user_id', user.id)
 
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
-      console.log('🏢 [FORM] Organizações:', orgIds)
 
       if (orgIds.length > 0) {
-        // Buscar entregadores
-        const { data: drivers, error: driversError } = await supabase
-          .from('delivery_drivers')
-          .select(`
-            id,
-            is_online,
-            profiles (
-              full_name
-            )
-          `)
-          .in('organization_id', orgIds)
-
-        if (driversError) {
-          console.error('❌ [FORM] Erro ao buscar entregadores:', driversError)
-        } else {
-          const driversData: DeliveryDriver[] = drivers?.map((driver: any) => ({
-            id: driver.id,
-            is_online: driver.is_online,
-            profiles: {
-              full_name: driver.profiles?.full_name || 'Nome não informado'
-            }
-          })) || []
-
-          setDeliveryDrivers(driversData)
-          console.log('🚚 [FORM] Entregadores carregados:', driversData.length)
-        }
-
-        // Carregar clientes
         const { data: customersData } = await supabase
           .from('customers')
           .select('*')
@@ -178,12 +127,12 @@ export function ManualOrderForm() {
           .order('full_name')
 
         setCustomers(customersData || [])
-        console.log('👥 [FORM] Clientes carregados:', customersData?.length || 0)
+        console.log('👥 [MANUAL ORDER] Clientes carregados:', customersData?.length || 0)
       }
 
-      console.log('✅ [FORM] Dados iniciais carregados')
+      console.log('✅ [MANUAL ORDER] Dados iniciais carregados')
     } catch (error) {
-      console.error('❌ [FORM] Erro ao carregar dados:', error)
+      console.error('❌ [MANUAL ORDER] Erro ao carregar dados:', error)
       toast.error('Erro ao carregar dados')
     }
   }
@@ -225,6 +174,11 @@ export function ManualOrderForm() {
       form.setValue('address_neighborhood', customer.address_neighborhood || '')
       form.setValue('address_city', customer.address_city || '')
     }
+  }
+
+  const handleDriverSelection = (driverId: string | null) => {
+    setSelectedDriverId(driverId)
+    console.log('🚚 [MANUAL ORDER] Entregador selecionado:', driverId)
   }
 
   const addOrderItem = () => {
@@ -277,9 +231,16 @@ export function ManualOrderForm() {
       return
     }
 
+    if (!selectedDriverId) {
+      toast.error('Selecione um entregador responsável')
+      return
+    }
+
     setLoading(true)
     
     try {
+      console.log('📦 [MANUAL ORDER] Criando pedido manual...')
+
       // Geocodificar endereço (simulado)
       const fullAddress = `${data.address_street}, ${data.address_number}, ${data.address_neighborhood}, ${data.address_city}`
       const delivery_latitude = -18.5122 + (Math.random() - 0.5) * 0.1
@@ -314,9 +275,9 @@ export function ManualOrderForm() {
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
-          delivery_driver_id: data.delivery_driver_id,
+          delivery_driver_id: selectedDriverId,
           value: getTotalValue(),
-          status: 'pending',
+          status: 'assigned', // Já atribuído ao entregador
           is_manual: true
         })
         .select()
@@ -340,24 +301,28 @@ export function ManualOrderForm() {
 
       if (itemsError) throw itemsError
 
-      // Criar evento
+      // Criar eventos
       await supabase
         .from('order_events')
-        .insert({
-          order_id: order.id,
-          event_type: 'created',
-          description: `Pedido manual criado para ${data.customer_name}`
-        })
+        .insert([
+          {
+            order_id: order.id,
+            event_type: 'created',
+            description: `Pedido manual criado para ${data.customer_name}`
+          },
+          {
+            order_id: order.id,
+            event_type: 'assigned',
+            description: 'Pedido atribuído ao entregador'
+          }
+        ])
 
-      // Atualizar índice do entregador para próximo pedido (round-robin)
-      if (autoMode) {
-        setCurrentDriverIndex(prev => prev + 1)
-      }
+      console.log('✅ [MANUAL ORDER] Pedido criado com sucesso:', order.id)
 
-      toast.success('Pedido criado com sucesso!')
+      toast.success('Pedido manual criado e atribuído com sucesso!')
       router.push('/')
     } catch (error) {
-      console.error('Erro ao criar pedido:', error)
+      console.error('❌ [MANUAL ORDER] Erro ao criar pedido:', error)
       toast.error('Erro ao criar pedido')
     } finally {
       setLoading(false)
@@ -505,68 +470,20 @@ export function ManualOrderForm() {
             </CardContent>
           </Card>
 
-          {/* Entregador Responsável */}
+          {/* NOVO COMPONENTE DE ENTREGADORES RESPONSÁVEL */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
-                  Entregador Responsável
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Automático</span>
-                  <Switch
-                    checked={autoMode}
-                    onCheckedChange={setAutoMode}
-                  />
-                </div>
-              </CardTitle>
+              <CardTitle>Entregador Responsável</CardTitle>
+              <CardDescription>
+                Selecione um entregador ativo ou ative o modo automático
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <Select 
-                value={form.watch('delivery_driver_id')} 
-                onValueChange={(value) => form.setValue('delivery_driver_id', value)}
-                disabled={autoMode}
-              >
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Selecione o entregador" />
-                </SelectTrigger>
-                <SelectContent>
-                  {deliveryDrivers.filter(d => d.is_online).map((driver) => (
-                    <SelectItem key={driver.id} value={driver.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span>{driver.profiles.full_name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {autoMode && (
-                <p className="text-sm text-blue-600 mt-2">
-                  Modo automático ativo - Entregador selecionado por rodízio
-                </p>
-              )}
-              {deliveryDrivers.length === 0 && (
-                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-                  <p className="text-sm text-yellow-800">
-                    Nenhum entregador encontrado. 
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="p-0 h-auto text-yellow-800 underline ml-1"
-                      onClick={() => router.push('/entregadores')}
-                    >
-                      Cadastre um entregador primeiro
-                    </Button>
-                  </p>
-                </div>
-              )}
-              {form.formState.errors.delivery_driver_id && (
-                <p className="text-sm text-red-500 mt-1">
-                  {form.formState.errors.delivery_driver_id.message}
-                </p>
-              )}
+              <ActiveDriverSelector
+                onDriverSelect={handleDriverSelection}
+                selectedDriverId={selectedDriverId || undefined}
+                disabled={loading}
+              />
             </CardContent>
           </Card>
 
@@ -749,7 +666,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || orderItems.length === 0 || deliveryDrivers.length === 0}
+              disabled={loading || orderItems.length === 0 || !selectedDriverId}
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
