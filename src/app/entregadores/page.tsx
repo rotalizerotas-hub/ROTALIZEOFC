@@ -4,6 +4,7 @@ import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { DriversManagement } from '@/components/drivers/DriversManagement'
 import { ActiveDriverSelector } from '@/components/orders/ActiveDriverSelector'
+import { VehicleSelector } from '@/components/drivers/VehicleSelector'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Users, Plus } from 'lucide-react'
@@ -100,8 +101,13 @@ export default function EntregadoresPage() {
         </div>
       </header>
 
+      
+
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto space-y-8">
+          
+          {/* Seleção de Veículo */}
+          <VehicleSelector />
           
           {/* Componente de Seleção de Entregador */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">

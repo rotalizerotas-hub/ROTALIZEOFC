@@ -11,9 +11,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
+import { AddressSearch } from '@/components/map/AddressSearch'
+import { EnhancedMapbox } from '@/components/map/EnhancedMapbox'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -25,7 +27,7 @@ const orderSchema = z.object({
   address_city: z.string().min(2, 'Cidade é obrigatória'),
   customer_name: z.string().min(2, 'Nome do cliente é obrigatório'),
   customer_id: z.string().optional(),
-  order_number: z.string().optional(), // NOVO CAMPO OPCIONAL
+  order_number: z.string().optional(),
 })
 
 type OrderFormData = z.infer<typeof orderSchema>
@@ -74,6 +76,13 @@ export function ManualOrderForm() {
   const [products, setProducts] = useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   
+  // Estados para endereço e mapa
+  const [addressCoordinates, setAddressCoordinates] = useState<{
+    latitude: number
+    longitude: number
+  } | null>(null)
+  const [selectedEstablishmentType, setSelectedEstablishmentType] = useState<EstablishmentType | null>(null)
+  
   // Estados para novos itens
   const [newProductName, setNewProductName] = useState('')
   const [newProductPrice, setNewProductPrice] = useState(0)
@@ -91,7 +100,7 @@ export function ManualOrderForm() {
       address_city: '',
       customer_name: '',
       customer_id: '',
-      order_number: '', // NOVO CAMPO
+      order_number: '',
     },
   })
 
@@ -100,16 +109,9 @@ export function ManualOrderForm() {
   }, [user])
 
   const formatCurrency = (value: string) => {
-    // Remove tudo que não é número
     const numbers = value.replace(/\D/g, '')
-    
-    // Se vazio, retorna vazio
     if (!numbers) return ''
-    
-    // Converte para número e divide por 100 para ter centavos
     const amount = parseInt(numbers) / 100
-    
-    // Formata como moeda brasileira
     return amount.toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
@@ -119,8 +121,6 @@ export function ManualOrderForm() {
   const handlePriceChange = (value: string) => {
     const formatted = formatCurrency(value)
     setNewProductPriceDisplay(formatted)
-    
-    // Converte de volta para número
     const numbers = value.replace(/\D/g, '')
     const amount = numbers ? parseInt(numbers) / 100 : 0
     setNewProductPrice(amount)
@@ -132,16 +132,13 @@ export function ManualOrderForm() {
     try {
       console.log('🔄 [MANUAL ORDER] Carregando dados iniciais...')
 
-      // Carregar tipos de estabelecimento
       const { data: types } = await supabase
         .from('establishment_types')
         .select('*')
         .order('name')
 
       setEstablishmentTypes(types || [])
-      console.log('🏪 [MANUAL ORDER] Tipos de estabelecimento:', types?.length || 0)
 
-      // Carregar clientes
       const { data: userOrgs } = await supabase
         .from('user_organizations')
         .select('organization_id')
@@ -157,7 +154,6 @@ export function ManualOrderForm() {
           .order('full_name')
 
         setCustomers(customersData || [])
-        console.log('👥 [MANUAL ORDER] Clientes carregados:', customersData?.length || 0)
       }
 
       console.log('✅ [MANUAL ORDER] Dados iniciais carregados')
@@ -192,6 +188,39 @@ export function ManualOrderForm() {
     } catch (error) {
       console.error('Erro ao carregar produtos:', error)
     }
+  }
+
+  const handleAddressFound = (addressData: {
+    fullAddress: string
+    street: string
+    number: string
+    neighborhood: string
+    city: string
+    latitude: number
+    longitude: number
+  }) => {
+    console.log('📍 [ADDRESS] Endereço encontrado:', addressData)
+    
+    // Preencher campos do formulário
+    form.setValue('address_street', addressData.street)
+    form.setValue('address_number', addressData.number)
+    form.setValue('address_neighborhood', addressData.neighborhood)
+    form.setValue('address_city', addressData.city)
+    
+    // Salvar coordenadas para o mapa
+    setAddressCoordinates({
+      latitude: addressData.latitude,
+      longitude: addressData.longitude
+    })
+  }
+
+  const handleEstablishmentTypeChange = (value: string) => {
+    form.setValue('establishment_type_id', value)
+    loadProducts(value)
+    
+    // Encontrar tipo selecionado para o mapa
+    const selectedType = establishmentTypes.find(type => type.id === value)
+    setSelectedEstablishmentType(selectedType || null)
   }
 
   const handleCustomerSelect = (customerId: string) => {
@@ -257,14 +286,13 @@ export function ManualOrderForm() {
       return
     }
 
-    // REMOVIDO: Validação obrigatória de itens
-    // if (orderItems.length === 0) {
-    //   toast.error('Adicione pelo menos um item ao pedido')
-    //   return
-    // }
-
     if (!selectedDriverId) {
       toast.error('Selecione um entregador responsável')
+      return
+    }
+
+    if (!addressCoordinates) {
+      toast.error('Busque o endereço no mapa antes de criar o pedido')
       return
     }
 
@@ -273,12 +301,8 @@ export function ManualOrderForm() {
     try {
       console.log('📦 [MANUAL ORDER] Criando pedido manual...')
 
-      // Geocodificar endereço (simulado)
       const fullAddress = `${data.address_street}, ${data.address_number}, ${data.address_neighborhood}, ${data.address_city}`
-      const delivery_latitude = -18.5122 + (Math.random() - 0.5) * 0.1
-      const delivery_longitude = -44.5550 + (Math.random() - 0.5) * 0.1
 
-      // Buscar organização do usuário
       const { data: userOrgs } = await supabase
         .from('user_organizations')
         .select('organization_id')
@@ -291,34 +315,32 @@ export function ManualOrderForm() {
 
       const organizationId = userOrgs[0].organization_id
 
-      // Criar pedido
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           organization_id: organizationId,
           customer_id: data.customer_id || null,
           customer_name: data.customer_name,
-          customer_phone: '', // Pode ser preenchido depois
+          customer_phone: '',
           delivery_address: fullAddress,
-          delivery_latitude,
-          delivery_longitude,
+          delivery_latitude: addressCoordinates.latitude,
+          delivery_longitude: addressCoordinates.longitude,
           address_street: data.address_street,
           address_number: data.address_number,
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
           delivery_driver_id: selectedDriverId,
-          value: getTotalValue(), // Pode ser 0 se não houver itens
-          status: 'assigned', // Já atribuído ao entregador
+          value: getTotalValue(),
+          status: 'assigned',
           is_manual: true,
-          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null // SALVAR NÚMERO DO PEDIDO
+          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null
         })
         .select()
         .single()
 
       if (orderError) throw orderError
 
-      // Criar itens do pedido (apenas se houver itens)
       if (orderItems.length > 0) {
         const orderItemsData = orderItems.map(item => ({
           order_id: order.id,
@@ -336,7 +358,6 @@ export function ManualOrderForm() {
         if (itemsError) throw itemsError
       }
 
-      // Criar eventos
       await supabase
         .from('order_events')
         .insert([
@@ -363,6 +384,18 @@ export function ManualOrderForm() {
       setLoading(false)
     }
   }
+
+  // Preparar dados para o mapa
+  const mapOrders = addressCoordinates && selectedEstablishmentType ? [{
+    id: 'preview',
+    latitude: addressCoordinates.latitude,
+    longitude: addressCoordinates.longitude,
+    customerName: form.watch('customer_name') || 'Novo Pedido',
+    status: 'pending',
+    categoryIcon: selectedEstablishmentType.icon_url,
+    categoryEmoji: selectedEstablishmentType.emoji,
+    orderNumber: form.watch('order_number')
+  }] : []
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
@@ -393,7 +426,7 @@ export function ManualOrderForm() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-4xl mx-auto space-y-8">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-6xl mx-auto space-y-8">
           
           {/* Categoria */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
@@ -406,10 +439,7 @@ export function ManualOrderForm() {
             <CardContent>
               <Select 
                 value={form.watch('establishment_type_id')} 
-                onValueChange={(value) => {
-                  form.setValue('establishment_type_id', value)
-                  loadProducts(value)
-                }}
+                onValueChange={handleEstablishmentTypeChange}
               >
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Selecione a categoria" />
@@ -433,7 +463,7 @@ export function ManualOrderForm() {
             </CardContent>
           </Card>
 
-          {/* Endereço */}
+          {/* Endereço com Busca e Mapa */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -441,7 +471,15 @@ export function ManualOrderForm() {
                 Endereço
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              
+              {/* Busca de Endereço */}
+              <AddressSearch 
+                onAddressFound={handleAddressFound}
+                disabled={loading}
+              />
+              
+              {/* Campos de Endereço */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <Label htmlFor="address_street">Rua</Label>
@@ -501,6 +539,29 @@ export function ManualOrderForm() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* Mapa */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Localização no Mapa
+                </Label>
+                <div className="h-96 rounded-2xl overflow-hidden border border-gray-200">
+                  <EnhancedMapbox
+                    orders={mapOrders}
+                    centerLat={addressCoordinates?.latitude}
+                    centerLng={addressCoordinates?.longitude}
+                    zoom={addressCoordinates ? 17 : 12}
+                    className="w-full h-full"
+                  />
+                </div>
+                {addressCoordinates && (
+                  <p className="text-xs text-green-600 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    Endereço localizado: {addressCoordinates.latitude.toFixed(6)}, {addressCoordinates.longitude.toFixed(6)}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -719,7 +780,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !selectedDriverId} // REMOVIDO: orderItems.length === 0
+              disabled={loading || !selectedDriverId || !addressCoordinates}
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
