@@ -3,16 +3,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+// Tipos flexíveis que aceitam tanto Order quanto DeliveryOrder
+interface MapOrder {
+  id: string
+  latitude?: number
+  longitude?: number
+  delivery_latitude?: number
+  delivery_longitude?: number
+  customer_name?: string
+  customerName?: string
+  status: string
+  establishment_type_id?: string
+  orderNumber?: string
+}
+
 interface MapboxMapProps {
-  orders?: Array<{
-    id: string
-    latitude: number
-    longitude: number
-    customerName: string
-    status: string
-    categoryEmoji: string
-    orderNumber?: string
-  }>
+  orders?: MapOrder[]
   centerLat?: number
   centerLng?: number
   zoom?: number
@@ -31,8 +37,19 @@ const getStatusColor = (status: string): string => {
   return colors[status as keyof typeof colors] || '#ffd93d'
 }
 
+const getEstablishmentEmoji = (establishmentTypeId?: string): string => {
+  const emojis = {
+    'restaurant': '🍕',
+    'pharmacy': '💊',
+    'grocery': '🛒',
+    'retail': '🛍️',
+    'other': '📦'
+  }
+  return emojis[establishmentTypeId as keyof typeof emojis] || '📦'
+}
+
 // Função para validar coordenadas
-const isValidCoordinate = (lat: number, lng: number): boolean => {
+const isValidCoordinate = (lat?: number, lng?: number): boolean => {
   return (
     typeof lat === 'number' && 
     typeof lng === 'number' && 
@@ -47,6 +64,26 @@ const isValidCoordinate = (lat: number, lng: number): boolean => {
   )
 }
 
+// Função para extrair coordenadas de diferentes formatos
+const extractCoordinates = (order: MapOrder): { lat: number; lng: number } | null => {
+  // Tentar delivery_latitude/delivery_longitude primeiro
+  if (isValidCoordinate(order.delivery_latitude, order.delivery_longitude)) {
+    return { lat: order.delivery_latitude!, lng: order.delivery_longitude! }
+  }
+  
+  // Tentar latitude/longitude
+  if (isValidCoordinate(order.latitude, order.longitude)) {
+    return { lat: order.latitude!, lng: order.longitude! }
+  }
+  
+  return null
+}
+
+// Função para extrair nome do cliente
+const extractCustomerName = (order: MapOrder): string => {
+  return order.customer_name || order.customerName || 'Cliente não identificado'
+}
+
 export function MapboxMap({ 
   orders = [], 
   centerLat = -19.9167, 
@@ -57,10 +94,9 @@ export function MapboxMap({
 }: MapboxMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const [mapLoaded, setMapLoaded] = useState(false)
-  const [mapError, setMapError] = useState(false)
 
   useEffect(() => {
-    // Simular carregamento do mapa para evitar erros
+    // Simular carregamento do mapa
     const timer = setTimeout(() => {
       setMapLoaded(true)
       console.log('🗺️ [MAPBOX] Mapa simulado carregado')
@@ -77,7 +113,8 @@ export function MapboxMap({
     
     const order = orders.find(o => o.id === orderId)
     if (order) {
-      toast.success(`Pedido selecionado: ${order.customerName}`)
+      const customerName = extractCustomerName(order)
+      toast.success(`Pedido selecionado: ${customerName}`)
     }
   }
 
@@ -85,14 +122,34 @@ export function MapboxMap({
     console.log('🚀 [ROUTE] Assumindo rota para:', orderId)
     const order = orders.find(o => o.id === orderId)
     if (order) {
-      toast.success(`Rota assumida para ${order.customerName}! 🗺️`)
+      const customerName = extractCustomerName(order)
+      toast.success(`Rota assumida para ${customerName}! 🗺️`)
     }
   }
 
-  // Filtrar apenas pedidos com coordenadas válidas
-  const validOrders = orders.filter(order => 
-    isValidCoordinate(order.latitude, order.longitude)
-  )
+  // Processar pedidos com coordenadas válidas
+  const validOrders = orders
+    .map(order => {
+      const coords = extractCoordinates(order)
+      if (!coords) return null
+      
+      return {
+        ...order,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        customerName: extractCustomerName(order),
+        categoryEmoji: getEstablishmentEmoji(order.establishment_type_id)
+      }
+    })
+    .filter(Boolean) as Array<{
+      id: string
+      latitude: number
+      longitude: number
+      customerName: string
+      status: string
+      categoryEmoji: string
+      orderNumber?: string
+    }>
 
   return (
     <div className={`relative w-full h-full rounded-2xl shadow-lg overflow-hidden bg-gray-100 ${className}`}>
@@ -123,7 +180,7 @@ export function MapboxMap({
                       {validOrders.length}
                     </span>
                   </h4>
-                  {validOrders.map((order, index) => (
+                  {validOrders.slice(0, 5).map((order, index) => (
                     <div 
                       key={order.id}
                       className="flex items-center gap-3 p-3 bg-white rounded-lg mb-2 cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
@@ -155,6 +212,11 @@ export function MapboxMap({
                       </button>
                     </div>
                   ))}
+                  {validOrders.length > 5 && (
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      +{validOrders.length - 5} pedidos adicionais
+                    </p>
+                  )}
                 </div>
               )}
               
