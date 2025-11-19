@@ -1,20 +1,28 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { Bike, RotateCcw, User } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Users, UserCheck, Zap, MapPin } from 'lucide-react'
+import { toast } from 'sonner'
 
-interface ActiveDriver {
+interface DeliveryDriver {
   id: string
   user_id: string
-  profiles: {
-    full_name: string
-    email: string
-  }
+  is_online: boolean
+  current_latitude: number | null
+  current_longitude: number | null
+  vehicle_type: 'moto' | 'carro' | 'caminhao'
+  total_today: number
+}
+
+interface Profile {
+  id: string
+  full_name: string
 }
 
 interface ActiveDriverSelectorProps {
@@ -29,392 +37,278 @@ export function ActiveDriverSelector({
   disabled = false 
 }: ActiveDriverSelectorProps) {
   const { user } = useAuth()
-  const [isAutomatic, setIsAutomatic] = useState(false)
-  const [activeDrivers, setActiveDrivers] = useState<ActiveDriver[]>([])
+  const [drivers, setDrivers] = useState<DeliveryDriver[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
-  const [roundRobinIndex, setRoundRobinIndex] = useState(0)
-  const [internalSelectedDriverId, setInternalSelectedDriverId] = useState<string | null>(null)
+  const [autoMode, setAutoMode] = useState(false)
 
-  // Sincronizar com localStorage para selectedDriverId
   useEffect(() => {
-    const loadSelectedDriver = () => {
-      try {
-        const stored = localStorage.getItem('selectedDriverId')
-        if (stored && stored !== internalSelectedDriverId) {
-          setInternalSelectedDriverId(stored)
-          onDriverSelect(stored)
-        }
-      } catch (error) {
-        console.log('Erro ao carregar entregador selecionado:', error)
-      }
+    if (user) {
+      loadActiveDrivers()
     }
+  }, [user])
 
-    loadSelectedDriver()
-
-    // Escutar mudanças no localStorage
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'selectedDriverId' && e.newValue !== internalSelectedDriverId) {
-        setInternalSelectedDriverId(e.newValue)
-        onDriverSelect(e.newValue)
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
-  }, [internalSelectedDriverId, onDriverSelect])
-
-  // Atualizar estado interno quando prop muda
-  useEffect(() => {
-    if (selectedDriverId !== internalSelectedDriverId) {
-      setInternalSelectedDriverId(selectedDriverId || null)
-    }
-  }, [selectedDriverId, internalSelectedDriverId])
-
-  // Memoizar função para evitar re-renders
-  const getNextDriverRoundRobin = useCallback((): ActiveDriver | null => {
-    if (activeDrivers.length === 0) {
-      console.log('⚠️ [ROUND ROBIN] Nenhum entregador ativo disponível')
-      return null
-    }
-
-    // Round Robin: próximo entregador na fila
-    const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
-    const nextDriver = activeDrivers[nextIndex]
-    
-    console.log(`🔄 [ROUND ROBIN] Próximo entregador: ${nextDriver.profiles.full_name} (índice: ${nextIndex})`)
-    return nextDriver
-  }, [activeDrivers, roundRobinIndex])
-
-  const saveRoundRobinIndex = useCallback((index: number) => {
-    try {
-      localStorage.setItem('roundRobinDriverIndex', index.toString())
-      setRoundRobinIndex(index)
-      console.log('💾 [ROUND ROBIN] Índice salvo:', index)
-    } catch (error) {
-      console.log('⚠️ [ROUND ROBIN] Erro ao salvar índice:', error)
-    }
-  }, [])
-
-  const loadRoundRobinIndex = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('roundRobinDriverIndex')
-      if (stored) {
-        setRoundRobinIndex(parseInt(stored, 10))
-        console.log('📋 [ROUND ROBIN] Índice carregado:', stored)
-      }
-    } catch (error) {
-      console.log('⚠️ [ROUND ROBIN] Erro ao carregar índice:', error)
-    }
-  }, [])
-
-  // Salvar estado automático
-  const saveAutomaticState = useCallback((automatic: boolean) => {
-    try {
-      localStorage.setItem('automaticDriverSelection', automatic.toString())
-      setIsAutomatic(automatic)
-      console.log('💾 [AUTOMATIC] Estado salvo:', automatic)
-    } catch (error) {
-      console.log('⚠️ [AUTOMATIC] Erro ao salvar estado:', error)
-    }
-  }, [])
-
-  // Carregar estado automático
-  const loadAutomaticState = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('automaticDriverSelection')
-      if (stored) {
-        const automaticState = stored === 'true'
-        setIsAutomatic(automaticState)
-        console.log('📋 [AUTOMATIC] Estado carregado:', automaticState)
-      }
-    } catch (error) {
-      console.log('⚠️ [AUTOMATIC] Erro ao carregar estado:', error)
-    }
-  }, [])
-
-  const loadActiveDrivers = useCallback(async () => {
+  const loadActiveDrivers = async () => {
     if (!user) return
 
+    setLoading(true)
+
     try {
-      console.log('🚚 [ACTIVE DRIVERS] Carregando entregadores ativos...')
+      console.log('🚚 [DRIVERS] Carregando entregadores ativos...')
 
       // Buscar organizações do usuário
-      const { data: userOrgs, error: userOrgsError } = await supabase
+      const { data: userOrgs } = await supabase
         .from('user_organizations')
         .select('organization_id')
         .eq('user_id', user.id)
 
-      if (userOrgsError) {
-        console.error('❌ [ACTIVE DRIVERS] Erro ao buscar organizações:', userOrgsError)
-        setActiveDrivers([])
-        setLoading(false)
-        return
-      }
-
       const orgIds = userOrgs?.map(uo => uo.organization_id) || []
 
       if (orgIds.length === 0) {
-        console.log('📭 [ACTIVE DRIVERS] Usuário sem organizações')
-        setActiveDrivers([])
+        console.log('⚠️ [DRIVERS] Usuário não possui organizações')
         setLoading(false)
         return
       }
 
-      // Buscar APENAS entregadores ATIVOS (is_online = true)
+      // Carregar entregadores online
       const { data: driversData, error: driversError } = await supabase
         .from('delivery_drivers')
-        .select('id, user_id, is_online')
+        .select('*')
         .in('organization_id', orgIds)
-        .eq('is_online', true) // APENAS ATIVOS
-        .order('created_at', { ascending: true })
+        .eq('is_online', true)
+        .order('total_today', { ascending: false })
 
       if (driversError) {
-        console.error('❌ [ACTIVE DRIVERS] Erro ao buscar entregadores:', driversError)
-        setActiveDrivers([])
-        setLoading(false)
-        return
+        console.error('❌ [DRIVERS] Erro ao carregar entregadores:', driversError)
+        throw driversError
       }
 
-      if (!driversData || driversData.length === 0) {
-        console.log('📭 [ACTIVE DRIVERS] Nenhum entregador ativo encontrado')
-        setActiveDrivers([])
-        setLoading(false)
-        return
-      }
+      console.log('📋 [DRIVERS] Entregadores encontrados:', driversData?.length || 0)
 
-      // Buscar perfis dos entregadores ativos
-      const userIds = driversData.map(d => d.user_id).filter(Boolean)
-      
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', userIds)
+      // Carregar perfis dos entregadores
+      const driverUserIds = driversData?.map(d => d.user_id) || []
+      let profilesData: Profile[] = []
 
-      if (profilesError) {
-        console.error('❌ [ACTIVE DRIVERS] Erro ao buscar perfis:', profilesError)
-      }
+      if (driverUserIds.length > 0) {
+        const { data: profilesResult, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', driverUserIds)
 
-      // Combinar dados
-      const processedDrivers: ActiveDriver[] = driversData.map((driver: any) => {
-        const profile = profilesData?.find(p => p.id === driver.user_id)
-        
-        return {
-          id: driver.id,
-          user_id: driver.user_id,
-          profiles: {
-            full_name: profile?.full_name || `Entregador ${driver.id.slice(-4)}`,
-            email: profile?.email || 'entregador@exemplo.com'
-          }
+        if (profilesError) {
+          console.error('❌ [DRIVERS] Erro ao carregar perfis:', profilesError)
+        } else {
+          profilesData = profilesResult || []
         }
+      }
+
+      setDrivers(driversData || [])
+      setProfiles(profilesData)
+
+      console.log('✅ [DRIVERS] Dados carregados:', {
+        drivers: driversData?.length || 0,
+        profiles: profilesData.length
       })
 
-      console.log('✅ [ACTIVE DRIVERS] Entregadores ativos carregados:', processedDrivers.length)
-      setActiveDrivers(processedDrivers)
-
     } catch (error) {
-      console.error('❌ [ACTIVE DRIVERS] Erro geral:', error)
-      setActiveDrivers([])
+      console.error('❌ [DRIVERS] Erro ao carregar entregadores:', error)
+      toast.error('Erro ao carregar entregadores ativos')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }
 
-  // Carregar dados iniciais apenas uma vez
-  useEffect(() => {
-    if (user) {
-      loadActiveDrivers()
-      loadRoundRobinIndex()
-      loadAutomaticState()
+  const getDriverProfile = (userId: string) => {
+    return profiles.find(p => p.id === userId)
+  }
+
+  const getVehicleIcon = (vehicleType: string) => {
+    const icons = {
+      moto: '🏍️',
+      carro: '🚗',
+      caminhao: '🚛'
     }
-  }, [user, loadActiveDrivers, loadRoundRobinIndex, loadAutomaticState])
+    return icons[vehicleType as keyof typeof icons] || '🚗'
+  }
 
-  // Gerenciar seleção automática apenas quando necessário
-  useEffect(() => {
-    if (isAutomatic && activeDrivers.length > 0) {
-      const nextDriver = getNextDriverRoundRobin()
-      if (nextDriver) {
-        const nextIndex = (roundRobinIndex + 1) % activeDrivers.length
-        saveRoundRobinIndex(nextIndex)
-        handleDriverSelection(nextDriver.id)
+  const getDriverInitials = (fullName: string) => {
+    return fullName
+      .split(' ')
+      .map(name => name.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
+  const handleDriverSelect = (driverId: string) => {
+    if (disabled) return
+    
+    if (selectedDriverId === driverId) {
+      // Desselecionar se já estiver selecionado
+      onDriverSelect(null)
+      setAutoMode(false)
+    } else {
+      onDriverSelect(driverId)
+      setAutoMode(false)
+    }
+  }
+
+  const handleAutoMode = () => {
+    if (disabled) return
+    
+    setAutoMode(!autoMode)
+    if (!autoMode) {
+      // Ativar modo automático - selecionar o primeiro entregador disponível
+      if (drivers.length > 0) {
+        onDriverSelect(drivers[0].id)
       }
+    } else {
+      // Desativar modo automático
+      onDriverSelect(null)
     }
-  }, [isAutomatic, activeDrivers.length])
+  }
 
-  const handleAutomaticToggle = useCallback(() => {
-    const newAutomatic = !isAutomatic
-    saveAutomaticState(newAutomatic)
-    
-    console.log(`🔄 [MODE] Modo ${newAutomatic ? 'automático' : 'manual'} ativado`)
-  }, [isAutomatic, saveAutomaticState])
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+          <span className="text-sm text-gray-600">Carregando entregadores...</span>
+        </div>
+      </div>
+    )
+  }
 
-  const handleDriverSelection = useCallback((driverId: string | null) => {
-    setInternalSelectedDriverId(driverId)
-    onDriverSelect(driverId)
-    
-    // Sincronizar com localStorage
-    try {
-      if (driverId) {
-        localStorage.setItem('selectedDriverId', driverId)
-      } else {
-        localStorage.removeItem('selectedDriverId')
-      }
-    } catch (error) {
-      console.log('Erro ao salvar entregador selecionado:', error)
-    }
-    
-    console.log(`👤 [DRIVER SELECTION] Entregador selecionado: ${driverId}`)
-  }, [onDriverSelect])
-
-  // Calcular próximo entregador para exibição (sem efeitos colaterais)
-  const nextDriverForDisplay = isAutomatic && activeDrivers.length > 0 
-    ? activeDrivers[(roundRobinIndex + 1) % activeDrivers.length] 
-    : null
-
-  // Usar estado interno ou prop
-  const currentSelectedDriverId = internalSelectedDriverId || selectedDriverId
+  if (drivers.length === 0) {
+    return (
+      <Card className="border-dashed border-2 border-gray-300">
+        <CardContent className="flex flex-col items-center justify-center py-8">
+          <Users className="w-12 h-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Nenhum entregador online
+          </h3>
+          <p className="text-sm text-gray-500 text-center mb-4">
+            Não há entregadores disponíveis no momento. Verifique se há entregadores online.
+          </p>
+          <Button
+            variant="outline"
+            onClick={loadActiveDrivers}
+            className="rounded-xl"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Atualizar Lista
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-4">
-      <Label className="flex items-center gap-2 text-base font-medium">
-        <Bike className="w-5 h-5 text-blue-600" />
-        Entregador Responsável
-      </Label>
-
-      {/* Botão Modo Automático */}
-      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-xl border border-blue-200">
-        <div className="flex items-center gap-3">
-          <RotateCcw className={`w-5 h-5 ${isAutomatic ? 'text-green-600' : 'text-gray-400'}`} />
-          <div>
-            <div className="font-medium text-gray-900">
-              Distribuição Automática (Round Robin)
-            </div>
-            <div className="text-sm text-gray-600">
-              {isAutomatic 
-                ? 'Cada pedido será atribuído automaticamente ao próximo entregador ativo'
-                : 'Escolha manualmente o entregador para este pedido'
-              }
-            </div>
-          </div>
+      {/* Modo Automático */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium">Entregadores Disponíveis</h3>
+          <p className="text-sm text-gray-500">
+            {drivers.length} entregador{drivers.length !== 1 ? 'es' : ''} online
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={handleAutomaticToggle}
-          disabled={disabled || loading || activeDrivers.length === 0}
-          className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border border-input shadow-sm h-9 px-4 py-2 rounded-xl lasy-highlight ${
-            isAutomatic 
-              ? 'bg-green-500 text-white hover:bg-green-600 border-green-500' 
-              : 'bg-red-500 text-white hover:bg-red-600 border-red-500'
-          }`}
+        <Button
+          variant={autoMode ? "default" : "outline"}
+          onClick={handleAutoMode}
+          disabled={disabled}
+          className="rounded-xl"
         >
-          {isAutomatic ? 'ON Automático' : 'OFF Automático'}
-        </button>
+          <Zap className="w-4 h-4 mr-2" />
+          {autoMode ? 'Automático Ativo' : 'Modo Automático'}
+        </Button>
       </div>
 
-      {/* Modo Automático - Próximo Entregador */}
-      {isAutomatic && activeDrivers.length > 0 && nextDriverForDisplay && (
-        <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center">
-              <RotateCcw className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <div className="font-medium text-green-900">
-                Próximo na fila: {nextDriverForDisplay.profiles.full_name}
-              </div>
-              <div className="text-sm text-green-700">
-                {nextDriverForDisplay.profiles.email}
-              </div>
-            </div>
-            <div className="text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded-full">
-              AUTO
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modo Manual - Seleção de Entregador */}
-      {!isAutomatic && (
-        <div className="space-y-3">
-          <Select 
-            value={currentSelectedDriverId || ''} 
-            onValueChange={handleDriverSelection}
-            disabled={disabled || loading}
-          >
-            <SelectTrigger className="rounded-xl h-12 border-2 border-gray-200 hover:border-blue-300 transition-colors">
-              <SelectValue placeholder={
-                loading 
-                  ? "🔄 Carregando entregadores ativos..." 
-                  : activeDrivers.length === 0 
-                    ? "❌ Nenhum entregador ativo"
-                    : "👤 Escolha um entregador ativo"
-              } />
-            </SelectTrigger>
-            <SelectContent className="w-full max-h-[300px]">
-              {activeDrivers.map((driver) => (
-                <SelectItem key={driver.id} value={driver.id} className="py-3">
-                  <div className="flex items-center gap-3 w-full">
-                    <div className="relative">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-                        <span className="text-white font-semibold text-sm">
-                          {driver.profiles.full_name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+      {/* Lista de Entregadores */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {drivers.map((driver) => {
+          const profile = getDriverProfile(driver.user_id)
+          const isSelected = selectedDriverId === driver.id
+          
+          return (
+            <Card
+              key={driver.id}
+              className={`cursor-pointer transition-all duration-200 ${
+                isSelected 
+                  ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' 
+                  : 'hover:shadow-md hover:border-gray-300'
+              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => handleDriverSelect(driver.id)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <Avatar className="w-12 h-12">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-green-500 text-white font-bold">
+                      {profile ? getDriverInitials(profile.full_name) : '??'}
+                    </AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium">
+                        {profile?.full_name || 'Entregador'}
+                      </h4>
+                      {isSelected && (
+                        <UserCheck className="w-4 h-4 text-blue-500" />
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 truncate">
-                        {driver.profiles.full_name}
-                      </div>
-                      <div className="text-sm text-gray-500 truncate">
-                        {driver.profiles.email}
-                      </div>
+                    
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="bg-green-100 text-green-700">
+                        <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                        Online
+                      </Badge>
+                      
+                      <span className="text-lg">
+                        {getVehicleIcon(driver.vehicle_type)}
+                      </span>
+                      
+                      {driver.current_latitude && driver.current_longitude && (
+                        <Badge variant="outline" className="text-xs">
+                          <MapPin className="w-3 h-3 mr-1" />
+                          Localizado
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded-full">
-                      ATIVO
+                    
+                    <div className="text-xs text-gray-500 mt-1">
+                      Entregas hoje: {driver.total_today}
                     </div>
                   </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
 
-          {/* Status dos Entregadores Ativos */}
-          <div className="text-sm text-gray-600">
-            {loading ? (
-              <span>🔄 Carregando entregadores ativos...</span>
-            ) : activeDrivers.length === 0 ? (
-              <span className="text-orange-600">⚠️ Nenhum entregador ativo no momento</span>
-            ) : (
-              <span className="text-green-600">
-                ✅ {activeDrivers.length} entregador{activeDrivers.length !== 1 ? 'es' : ''} ativo{activeDrivers.length !== 1 ? 's' : ''} disponível{activeDrivers.length !== 1 ? 'eis' : ''}
-              </span>
-            )}
-          </div>
+      {/* Informação sobre seleção */}
+      {selectedDriverId && !autoMode && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl border border-blue-200">
+          <UserCheck className="w-5 h-5 text-blue-500" />
+          <span className="text-sm text-blue-700">
+            Entregador selecionado: {
+              (() => {
+                const driver = drivers.find(d => d.id === selectedDriverId)
+                const profile = driver ? getDriverProfile(driver.user_id) : null
+                return profile?.full_name || 'Entregador'
+              })()
+            }
+          </span>
         </div>
       )}
 
-      {/* Aviso quando não há entregadores ativos */}
-      {activeDrivers.length === 0 && !loading && (
-        <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
-          <div className="flex items-center gap-2 text-orange-700">
-            <span className="text-lg">⚠️</span>
-            <div>
-              <div className="font-medium">Nenhum entregador ativo</div>
-              <div className="text-sm">
-                Ative entregadores na seção "Entregadores" para poder criar pedidos
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Debug Info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
-          <div>🔍 Entregadores ativos: {activeDrivers.length}</div>
-          <div>🔄 Modo: {isAutomatic ? 'Automático' : 'Manual'}</div>
-          <div>📋 Índice Round Robin: {roundRobinIndex}</div>
-          <div>👤 Selecionado: {currentSelectedDriverId || 'Nenhum'}</div>
+      {autoMode && (
+        <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200">
+          <Zap className="w-5 h-5 text-green-500" />
+          <span className="text-sm text-green-700">
+            Modo automático ativo - O sistema selecionará o melhor entregador disponível
+          </span>
         </div>
       )}
     </div>

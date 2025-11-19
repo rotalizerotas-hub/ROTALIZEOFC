@@ -265,7 +265,7 @@ export function Dashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button
-                  onClick={() => router.push('/pedidos/novo')}
+                  onClick={() => router.push('/novo-pedido-manual')}
                   className="h-auto p-6 flex flex-col items-center gap-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl"
                 >
                   <Plus className="w-8 h-8" />
@@ -331,7 +331,7 @@ export function Dashboard() {
                   <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">Nenhum pedido encontrado</p>
                   <Button
-                    onClick={() => router.push('/pedidos/novo')}
+                    onClick={() => router.push('/novo-pedido-manual')}
                     className="mt-4 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
                   >
                     <Plus className="w-4 h-4 mr-2" />
