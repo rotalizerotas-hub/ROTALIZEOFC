@@ -247,24 +247,6 @@ export function LeafletMap({
 
   useEffect(() => {
     setIsClient(true)
-    
-    // Carregar CSS do Leaflet via link tag
-    const loadLeafletCSS = () => {
-      if (typeof window !== 'undefined') {
-        const existingLink = document.querySelector('link[href*="leaflet"]')
-        if (!existingLink) {
-          const link = document.createElement('link')
-          link.rel = 'stylesheet'
-          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-          link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
-          link.crossOrigin = 'anonymous'
-          document.head.appendChild(link)
-          console.log('✅ [MAP] CSS do Leaflet carregado via CDN')
-        }
-      }
-    }
-    
-    loadLeafletCSS()
   }, [])
 
   useEffect(() => {
@@ -331,6 +313,44 @@ export function LeafletMap({
       </div>
       
       <style jsx global>{`
+        /* Estilos básicos do Leaflet */
+        .leaflet-container {
+          height: 100%;
+          width: 100%;
+          border-radius: 1rem;
+        }
+        
+        .leaflet-control-container .leaflet-routing-container-hide {
+          display: none;
+        }
+        
+        .leaflet-control-zoom {
+          border: none !important;
+          border-radius: 8px !important;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        
+        .leaflet-control-zoom a {
+          border-radius: 8px !important;
+          border: none !important;
+          background: white !important;
+          color: #333 !important;
+          font-weight: bold !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+          background: #f0f0f0 !important;
+        }
+        
+        .leaflet-popup-content-wrapper {
+          border-radius: 12px !important;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+        }
+        
+        .leaflet-popup-tip {
+          background: white !important;
+        }
+        
         @keyframes pulse {
           0% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7); }
           70% { box-shadow: 0 0 0 10px rgba(0, 184, 148, 0); }
@@ -349,10 +369,6 @@ export function LeafletMap({
         
         .driver-marker {
           z-index: 999;
-        }
-        
-        .leaflet-container {
-          border-radius: 1rem;
         }
       `}</style>
     </>
