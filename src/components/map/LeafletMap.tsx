@@ -248,12 +248,19 @@ export function LeafletMap({
   useEffect(() => {
     setIsClient(true)
     
-    // Importar CSS do Leaflet dinamicamente
-    const loadLeafletCSS = async () => {
-      try {
-        await import('leaflet/dist/leaflet.css')
-      } catch (error) {
-        console.log('CSS do Leaflet já carregado ou erro ao carregar')
+    // Carregar CSS do Leaflet via link tag
+    const loadLeafletCSS = () => {
+      if (typeof window !== 'undefined') {
+        const existingLink = document.querySelector('link[href*="leaflet"]')
+        if (!existingLink) {
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+          link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
+          link.crossOrigin = 'anonymous'
+          document.head.appendChild(link)
+          console.log('✅ [MAP] CSS do Leaflet carregado via CDN')
+        }
       }
     }
     
