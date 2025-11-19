@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { LatLngExpression } from 'leaflet'
 
 // Importar Leaflet dinamicamente para evitar problemas de SSR
 const MapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false })
@@ -107,9 +108,11 @@ function CustomMarker({ order, onOrderClick }: { order: OrderMarker, onOrderClic
     }
   }
 
+  const position: LatLngExpression = [order.latitude, order.longitude]
+
   return (
     <Marker 
-      position={[order.latitude, order.longitude]} 
+      position={position}
       icon={customIcon}
       eventHandlers={{
         click: handleClick
@@ -193,8 +196,10 @@ function DriverMarker({ driver }: { driver: DeliveryDriver }) {
     iconAnchor: [17, 35]
   })
 
+  const position: LatLngExpression = [driver.latitude, driver.longitude]
+
   return (
-    <Marker position={[driver.latitude, driver.longitude]} icon={customIcon}>
+    <Marker position={position} icon={customIcon}>
       <Popup>
         <div style={{ padding: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -238,13 +243,21 @@ export function LeafletMap({
   className = '' 
 }: LeafletMapProps) {
   const [isClient, setIsClient] = useState(false)
-  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([])
+  const [routeCoordinates, setRouteCoordinates] = useState<LatLngExpression[]>([])
 
   useEffect(() => {
     setIsClient(true)
     
-    // Importar CSS do Leaflet
-    import('leaflet/dist/leaflet.css')
+    // Importar CSS do Leaflet dinamicamente
+    const loadLeafletCSS = async () => {
+      try {
+        await import('leaflet/dist/leaflet.css')
+      } catch (error) {
+        console.log('CSS do Leaflet já carregado ou erro ao carregar')
+      }
+    }
+    
+    loadLeafletCSS()
   }, [])
 
   useEffect(() => {
@@ -266,11 +279,13 @@ export function LeafletMap({
     )
   }
 
+  const center: LatLngExpression = [centerLat, centerLng]
+
   return (
     <>
       <div className={`w-full h-full rounded-2xl shadow-lg overflow-hidden ${className}`}>
         <MapContainer
-          center={[centerLat, centerLng]}
+          center={center}
           zoom={zoom}
           style={{ height: '100%', width: '100%' }}
           key={`${centerLat}-${centerLng}-${zoom}`}
@@ -298,9 +313,11 @@ export function LeafletMap({
           {routeCoordinates.length > 0 && (
             <Polyline 
               positions={routeCoordinates}
-              color="#00b894"
-              weight={6}
-              opacity={0.8}
+              pathOptions={{
+                color: "#00b894",
+                weight: 6,
+                opacity: 0.8
+              }}
             />
           )}
         </MapContainer>
