@@ -1,161 +1,154 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapboxMap } from '@/components/map/MapboxMap'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { Plus, Users, Map, Package, TrendingUp, FileText } from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { LeafletMap } from '@/components/map/LeafletMap'
+import { 
+  Package, 
+  Users, 
+  MapPin, 
+  Plus, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle,
+  Map,
+  FileText,
+  UserPlus,
+  Settings
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
-interface Organization {
-  id: string
-  name: string
-  latitude: number
-  longitude: number
-  establishment_types: {
-    name: string
-    icon_url: string
-    emoji: string
-  }
+interface DashboardStats {
+  totalOrders: number
+  pendingOrders: number
+  deliveredOrders: number
+  activeDrivers: number
 }
 
-interface Order {
+interface RecentOrder {
   id: string
   customer_name: string
-  delivery_latitude: number
-  delivery_longitude: number
   status: string
-  value: number
   created_at: string
-}
-
-interface DashboardData {
-  organizations: Array<{
-    id: string
-    name: string
-    latitude: number
-    longitude: number
-    establishment_type: {
-      name: string
-      icon_url: string
-      emoji: string
-    }
-  }>
-  orders: Order[]
-  stats: {
-    totalOrders: number
-    pendingOrders: number
-    activeDrivers: number
-    todayRevenue: number
-  }
+  value: number
 }
 
 export function Dashboard() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
-  const [data, setData] = useState<DashboardData>({
-    organizations: [],
-    orders: [],
-    stats: {
-      totalOrders: 0,
-      pendingOrders: 0,
-      activeDrivers: 0,
-      todayRevenue: 0
-    }
+  const [stats, setStats] = useState<DashboardStats>({
+    totalOrders: 0,
+    pendingOrders: 0,
+    deliveredOrders: 0,
+    activeDrivers: 0
   })
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadDashboardData()
+    if (user) {
+      loadDashboardData()
+    }
   }, [user])
 
   const loadDashboardData = async () => {
     if (!user) return
 
     try {
+      console.log('📊 [DASHBOARD] Carregando dados...')
+
       // Buscar organizações do usuário
       const { data: userOrgs } = await supabase
         .from('user_organizations')
-        .select(`
-          organization_id,
-          organizations (
-            id,
-            name,
-            latitude,
-            longitude,
-            establishment_types (
-              name,
-              icon_url,
-              emoji
-            )
-          )
-        `)
+        .select('organization_id')
         .eq('user_id', user.id)
 
-      const organizations = userOrgs?.map((uo: any) => ({
-        id: uo.organizations.id,
-        name: uo.organizations.name,
-        latitude: uo.organizations.latitude,
-        longitude: uo.organizations.longitude,
-        establishment_type: uo.organizations.establishment_types || {
-          name: 'Estabelecimento',
-          icon_url: '/icons/default.png',
-          emoji: '🏪'
-        }
-      })) || []
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
 
-      // Buscar pedidos das organizações
-      const orgIds = organizations.map(org => org.id)
-      let orders: Order[] = []
-      
-      if (orgIds.length > 0) {
-        const { data: ordersData } = await supabase
-          .from('orders')
-          .select('*')
-          .in('organization_id', orgIds)
-          .order('created_at', { ascending: false })
-          .limit(50)
-
-        orders = ordersData || []
+      if (orgIds.length === 0) {
+        setLoading(false)
+        return
       }
 
-      // Calcular estatísticas
-      const today = new Date().toISOString().split('T')[0]
-      const todayOrders = orders.filter(order => 
-        order.created_at.startsWith(today)
-      )
+      // Carregar estatísticas de pedidos
+      const { data: orders } = await supabase
+        .from('orders')
+        .select('id, status, value, customer_name, created_at')
+        .in('organization_id', orgIds)
+        .order('created_at', { ascending: false })
 
-      let activeDriversCount = 0
-      if (orgIds.length > 0) {
-        const { data: activeDrivers } = await supabase
-          .from('delivery_drivers')
-          .select('id')
-          .in('organization_id', orgIds)
-          .eq('is_online', true)
+      // Carregar entregadores ativos
+      const { data: drivers } = await supabase
+        .from('delivery_drivers')
+        .select('id, is_online')
+        .in('organization_id', orgIds)
 
-        activeDriversCount = activeDrivers?.length || 0
-      }
+      const totalOrders = orders?.length || 0
+      const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0
+      const deliveredOrders = orders?.filter(o => o.status === 'delivered').length || 0
+      const activeDrivers = drivers?.filter(d => d.is_online).length || 0
 
-      const stats = {
-        totalOrders: orders.length,
-        pendingOrders: orders.filter(o => o.status === 'pending').length,
-        activeDrivers: activeDriversCount,
-        todayRevenue: todayOrders.reduce((sum, order) => sum + order.value, 0)
-      }
-
-      setData({
-        organizations,
-        orders,
-        stats
+      setStats({
+        totalOrders,
+        pendingOrders,
+        deliveredOrders,
+        activeDrivers
       })
+
+      setRecentOrders(orders?.slice(0, 5) || [])
+
+      console.log('✅ [DASHBOARD] Dados carregados:', {
+        totalOrders,
+        pendingOrders,
+        deliveredOrders,
+        activeDrivers
+      })
+
     } catch (error) {
-      console.error('Erro ao carregar dados do dashboard:', error)
+      console.error('❌ [DASHBOARD] Erro ao carregar dados:', error)
+      toast.error('Erro ao carregar dados do dashboard')
     } finally {
       setLoading(false)
     }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      pending: { label: 'Pendente', variant: 'secondary' as const, color: 'bg-yellow-100 text-yellow-800' },
+      assigned: { label: 'Atribuído', variant: 'secondary' as const, color: 'bg-blue-100 text-blue-800' },
+      in_transit: { label: 'Em trânsito', variant: 'secondary' as const, color: 'bg-purple-100 text-purple-800' },
+      delivered: { label: 'Entregue', variant: 'secondary' as const, color: 'bg-green-100 text-green-800' },
+      cancelled: { label: 'Cancelado', variant: 'secondary' as const, color: 'bg-red-100 text-red-800' }
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+
+    return (
+      <Badge className={config.color}>
+        {config.label}
+      </Badge>
+    )
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value)
   }
 
   if (loading) {
@@ -165,7 +158,7 @@ export function Dashboard() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
             <span className="text-2xl font-bold text-white">R</span>
           </div>
-          <p className="text-gray-600">Carregando...</p>
+          <p className="text-gray-600">Carregando dashboard...</p>
         </div>
       </div>
     )
@@ -179,191 +172,198 @@ export function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
-                <span className="text-xl font-bold text-white">R</span>
+                <span className="text-2xl font-bold text-white">R</span>
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                  Rotalize
+                  RotaLize
                 </h1>
-                <p className="text-sm text-gray-600">Dashboard</p>
+                <p className="text-sm text-gray-600">Sistema de Gestão de Entregas</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">
-                Olá, {user?.email}
-              </span>
-              <Button 
-                variant="outline" 
-                onClick={signOut}
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => router.push('/configuracoes')}
                 className="rounded-xl"
               >
-                Sair
+                <Settings className="w-4 h-4 mr-2" />
+                Configurações
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-6">
-        {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Total de Pedidos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-gray-900">
-                {data.stats.totalOrders}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Package className="w-4 h-4 text-yellow-500" />
-                Pedidos Pendentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-yellow-600">
-                {data.stats.pendingOrders}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <Users className="w-4 h-4 text-green-500" />
-                Entregadores Online
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-600">
-                {data.stats.activeDrivers}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-blue-500" />
-                Receita Hoje
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-blue-600">
-                R$ {data.stats.todayRevenue.toFixed(2)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Botões de Ação */}
-        <div className="flex flex-wrap gap-4 mb-8">
-          <Button 
-            onClick={() => router.push('/novo-pedido-manual')}
-            className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3"
-          >
-            <FileText className="w-5 h-5 mr-2" />
-            Novo Pedido Manual
-          </Button>
-          <Button 
-            onClick={() => router.push('/entregadores')}
-            variant="outline"
-            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
-          >
-            <Users className="w-5 h-5 mr-2" />
-            Entregadores
-          </Button>
-          <Button 
-            onClick={() => router.push('/clientes')}
-            variant="outline"
-            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
-          >
-            <Users className="w-5 h-5 mr-2" />
-            Clientes
-          </Button>
-          <Button 
-            onClick={() => router.push('/produtos')}
-            variant="outline"
-            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
-          >
-            <Package className="w-5 h-5 mr-2" />
-            Produtos
-          </Button>
-          <Button 
-            variant="outline"
-            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
-          >
-            <Map className="w-5 h-5 mr-2" />
-            Ver Mapa Completo
-          </Button>
-        </div>
-
-        {/* Mapa Principal */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-2xl rounded-3xl overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold text-gray-800">
-              Mapa de Entregas
-            </CardTitle>
-            <CardDescription>
-              Visualize suas organizações e pedidos em tempo real
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="h-96">
-              <MapboxMap 
-                organizations={data.organizations}
-                orders={data.orders}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Lista de Pedidos Recentes */}
-        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl mt-8">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold text-gray-800">
-              Pedidos Recentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {data.orders.slice(0, 5).map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{order.customer_name}</h4>
-                    <p className="text-sm text-gray-600">R$ {order.value.toFixed(2)}</p>
-                  </div>
-                  <Badge 
-                    variant={
-                      order.status === 'delivered' ? 'default' :
-                      order.status === 'pending' ? 'secondary' :
-                      order.status === 'in_transit' ? 'outline' : 'destructive'
-                    }
-                    className="rounded-full"
-                  >
-                    {order.status === 'pending' ? 'Pendente' :
-                     order.status === 'assigned' ? 'Atribuído' :
-                     order.status === 'in_transit' ? 'Em trânsito' :
-                     order.status === 'delivered' ? 'Entregue' : 'Cancelado'}
-                  </Badge>
-                </div>
-              ))}
-              {data.orders.length === 0 && (
-                <p className="text-center text-gray-500 py-8">
-                  Nenhum pedido encontrado
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-8">
+          
+          {/* Estatísticas */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total de Pedidos</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.totalOrders}</div>
+                <p className="text-xs text-muted-foreground">
+                  Todos os pedidos
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">{stats.pendingOrders}</div>
+                <p className="text-xs text-muted-foreground">
+                  Aguardando atribuição
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Entregues</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{stats.deliveredOrders}</div>
+                <p className="text-xs text-muted-foreground">
+                  Concluídos com sucesso
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Entregadores Ativos</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">{stats.activeDrivers}</div>
+                <p className="text-xs text-muted-foreground">
+                  Online agora
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ações Rápidas */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader>
+              <CardTitle>Ações Rápidas</CardTitle>
+              <CardDescription>
+                Acesso rápido às principais funcionalidades
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Button
+                  onClick={() => router.push('/pedidos/novo')}
+                  className="h-auto p-6 flex flex-col items-center gap-3 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl"
+                >
+                  <Plus className="w-8 h-8" />
+                  <div className="text-center">
+                    <div className="font-semibold">Novo Pedido</div>
+                    <div className="text-xs opacity-90">Criar pedido manual</div>
+                  </div>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/mapa')}
+                  className="h-auto p-6 flex flex-col items-center gap-3 rounded-2xl"
+                >
+                  <Map className="w-8 h-8" />
+                  <div className="text-center">
+                    <div className="font-semibold">Ver Mapa Completo</div>
+                    <div className="text-xs text-muted-foreground">Visualizar entregas</div>
+                  </div>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/entregadores')}
+                  className="h-auto p-6 flex flex-col items-center gap-3 rounded-2xl"
+                >
+                  <Users className="w-8 h-8" />
+                  <div className="text-center">
+                    <div className="font-semibold">Entregadores</div>
+                    <div className="text-xs text-muted-foreground">Gerenciar equipe</div>
+                  </div>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/clientes/novo')}
+                  className="h-auto p-6 flex flex-col items-center gap-3 rounded-2xl"
+                >
+                  <UserPlus className="w-8 h-8" />
+                  <div className="text-center">
+                    <div className="font-semibold">Novo Cliente</div>
+                    <div className="text-xs text-muted-foreground">Cadastrar cliente</div>
+                  </div>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pedidos Recentes */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Pedidos Recentes
+              </CardTitle>
+              <CardDescription>
+                Últimos pedidos criados no sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentOrders.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Nenhum pedido encontrado</p>
+                  <Button
+                    onClick={() => router.push('/pedidos/novo')}
+                    className="mt-4 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Criar Primeiro Pedido
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium">{order.customer_name}</div>
+                        <div className="text-sm text-gray-500">
+                          {formatDate(order.created_at)}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="font-medium">{formatCurrency(order.value)}</div>
+                          {getStatusBadge(order.status)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
