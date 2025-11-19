@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@googlemaps/js-api-loader':
-        specifier: ^1.16.10
+        specifier: ^1.16.8
         version: 1.16.10
       '@hookform/resolvers':
         specifier: ^3.9.1
