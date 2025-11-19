@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearch } from '@/components/map/AddressSearch'
-import { EnhancedMapbox } from '@/components/map/EnhancedMapbox'
+import { LeafletMap } from '@/components/map/LeafletMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin, CheckCircle } from 'lucide-react'
@@ -291,7 +291,7 @@ export function ManualOrderForm() {
     setOrderItems(orderItems.filter(item => item.id !== itemId))
   }
 
-  const getTotalValue = () => {
+  const getTotalValue =  () => {
     return orderItems.reduce((sum, item) => sum + item.total_price, 0)
   }
 
@@ -575,7 +575,7 @@ export function ManualOrderForm() {
                   Localização no Mapa
                 </Label>
                 <div className="h-96 rounded-2xl overflow-hidden border border-gray-200">
-                  <EnhancedMapbox
+                  <LeafletMap
                     orders={mapOrders}
                     centerLat={addressCoordinates?.latitude}
                     centerLng={addressCoordinates?.longitude}
