@@ -15,7 +15,7 @@ import { AddressSearch } from '@/components/map/AddressSearch'
 import { EnhancedMapbox } from '@/components/map/EnhancedMapbox'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin, CheckCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -73,7 +73,7 @@ export function ManualOrderForm() {
   // Estados para dados
   const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [products, setProducts] = useState<Product[]>([])
+  const [products, setProducts] =  useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   
   // Estados para endereço e mapa
@@ -82,6 +82,7 @@ export function ManualOrderForm() {
     longitude: number
   } | null>(null)
   const [selectedEstablishmentType, setSelectedEstablishmentType] = useState<EstablishmentType | null>(null)
+  const [addressFound, setAddressFound] = useState(false)
   
   // Estados para novos itens
   const [newProductName, setNewProductName] = useState('')
@@ -199,7 +200,7 @@ export function ManualOrderForm() {
     latitude: number
     longitude: number
   }) => {
-    console.log('📍 [ADDRESS] Endereço encontrado:', addressData)
+    console.log('📍 [MANUAL ORDER] Endereço encontrado:', addressData)
     
     // Preencher campos do formulário
     form.setValue('address_street', addressData.street)
@@ -212,6 +213,14 @@ export function ManualOrderForm() {
       latitude: addressData.latitude,
       longitude: addressData.longitude
     })
+    
+    // Marcar que endereço foi encontrado
+    setAddressFound(true)
+    
+    console.log('✅ [MANUAL ORDER] Coordenadas salvas para o mapa:', {
+      latitude: addressData.latitude,
+      longitude: addressData.longitude
+    })
   }
 
   const handleEstablishmentTypeChange = (value: string) => {
@@ -221,6 +230,8 @@ export function ManualOrderForm() {
     // Encontrar tipo selecionado para o mapa
     const selectedType = establishmentTypes.find(type => type.id === value)
     setSelectedEstablishmentType(selectedType || null)
+    
+    console.log('🏪 [MANUAL ORDER] Tipo de estabelecimento selecionado:', selectedType)
   }
 
   const handleCustomerSelect = (customerId: string) => {
@@ -232,6 +243,10 @@ export function ManualOrderForm() {
       form.setValue('address_number', customer.address_number || '')
       form.setValue('address_neighborhood', customer.address_neighborhood || '')
       form.setValue('address_city', customer.address_city || '')
+      
+      // Reset address found state quando selecionar cliente
+      setAddressFound(false)
+      setAddressCoordinates(null)
     }
   }
 
@@ -391,11 +406,17 @@ export function ManualOrderForm() {
     latitude: addressCoordinates.latitude,
     longitude: addressCoordinates.longitude,
     customerName: form.watch('customer_name') || 'Novo Pedido',
-    status: 'pending',
+    status: 'preview',
     categoryIcon: selectedEstablishmentType.icon_url,
     categoryEmoji: selectedEstablishmentType.emoji,
     orderNumber: form.watch('order_number')
   }] : []
+
+  console.log('🗺️ [MANUAL ORDER] Dados do mapa:', {
+    mapOrders,
+    addressCoordinates,
+    selectedEstablishmentType: selectedEstablishmentType?.name
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
@@ -469,6 +490,12 @@ export function ManualOrderForm() {
               <CardTitle className="flex items-center gap-2">
                 <Home className="w-5 h-5" />
                 Endereço
+                {addressFound && (
+                  <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700">
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                    Localizado
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -557,9 +584,19 @@ export function ManualOrderForm() {
                   />
                 </div>
                 {addressCoordinates && (
-                  <p className="text-xs text-green-600 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    Endereço localizado: {addressCoordinates.latitude.toFixed(6)}, {addressCoordinates.longitude.toFixed(6)}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Endereço localizado: {addressCoordinates.latitude.toFixed(6)}, {addressCoordinates.longitude.toFixed(6)}
+                    </p>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                      📍 Marcado no mapa
+                    </Badge>
+                  </div>
+                )}
+                {!addressCoordinates && (
+                  <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                    💡 Use a busca de endereço acima para localizar e marcar no mapa
                   </p>
                 )}
               </div>

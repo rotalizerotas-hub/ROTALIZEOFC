@@ -52,7 +52,8 @@ const getStatusColor = (status: string): string => {
     assigned: '#6c5ce7',
     in_transit: '#fd79a8',
     delivered: '#00b894',
-    cancelled: '#ddd'
+    cancelled: '#ddd',
+    preview: '#3b82f6' // Cor especial para preview
   }
   return colors[status as keyof typeof colors] || '#ddd'
 }
@@ -60,18 +61,20 @@ const getStatusColor = (status: string): string => {
 export function EnhancedMapbox({ 
   orders = [], 
   drivers = [], 
-  centerLat = -18.5122, 
-  centerLng = -44.5550, 
+  centerLat = -19.9167, 
+  centerLng = -43.9345, 
   zoom = 12,
   onOrderClick,
   className = '' 
 }: EnhancedMapboxProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const map = useRef<mapboxgl.Map | null>(null)
-  const [currentRoute, setCurrentRoute] = useState<any>(null)
+  const markersRef = useRef<mapboxgl.Marker[]>([])
 
   useEffect(() => {
     if (map.current) return // Inicializar apenas uma vez
+
+    console.log('🗺️ [MAP] Inicializando mapa...')
 
     if (mapContainer.current) {
       map.current = new mapboxgl.Map({
@@ -86,13 +89,19 @@ export function EnhancedMapbox({
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
       map.current.on('load', () => {
-        console.log('🗺️ [MAP] Mapa carregado')
+        console.log('✅ [MAP] Mapa carregado com sucesso')
         updateMarkers()
+      })
+
+      map.current.on('error', (e) => {
+        console.error('❌ [MAP] Erro no mapa:', e)
       })
     }
 
     return () => {
       if (map.current) {
+        console.log('🗺️ [MAP] Removendo mapa...')
+        clearMarkers()
         map.current.remove()
         map.current = null
       }
@@ -101,6 +110,12 @@ export function EnhancedMapbox({
 
   // Atualizar marcadores quando dados mudarem
   useEffect(() => {
+    console.log('🔄 [MAP] Atualizando marcadores...', { 
+      orders: orders.length, 
+      drivers: drivers.length,
+      mapLoaded: map.current?.isStyleLoaded() 
+    })
+    
     if (map.current && map.current.isStyleLoaded()) {
       updateMarkers()
     }
@@ -109,59 +124,92 @@ export function EnhancedMapbox({
   // Centralizar mapa quando coordenadas mudarem
   useEffect(() => {
     if (map.current && centerLat && centerLng) {
+      console.log('📍 [MAP] Centralizando mapa em:', { centerLat, centerLng, zoom })
+      
       map.current.flyTo({
         center: [centerLng, centerLat],
         zoom: zoom,
-        duration: 1000
+        duration: 1500,
+        essential: true
       })
     }
   }, [centerLat, centerLng, zoom])
 
+  const clearMarkers = () => {
+    console.log('🧹 [MAP] Limpando marcadores existentes:', markersRef.current.length)
+    markersRef.current.forEach(marker => marker.remove())
+    markersRef.current = []
+  }
+
   const updateMarkers = () => {
-    if (!map.current) return
+    if (!map.current) {
+      console.warn('⚠️ [MAP] Mapa não inicializado')
+      return
+    }
+
+    console.log('🎯 [MAP] Atualizando marcadores...', { orders: orders.length, drivers: drivers.length })
 
     // Limpar marcadores existentes
-    const existingMarkers = document.querySelectorAll('.custom-marker')
-    existingMarkers.forEach(marker => marker.remove())
+    clearMarkers()
 
     // Adicionar marcadores de pedidos
-    orders.forEach(order => {
+    orders.forEach((order, index) => {
+      console.log(`📍 [MAP] Adicionando marcador de pedido ${index + 1}:`, order)
+
       const markerElement = document.createElement('div')
       markerElement.className = 'custom-marker order-marker'
+      markerElement.style.cursor = 'pointer'
+      
+      const isPreview = order.id === 'preview'
+      const backgroundColor = getStatusColor(isPreview ? 'preview' : order.status)
+      
       markerElement.innerHTML = `
         <div style="
-          background: ${getStatusColor(order.status)};
-          width: 40px;
-          height: 40px;
+          background: ${backgroundColor};
+          width: ${isPreview ? '50px' : '40px'};
+          height: ${isPreview ? '50px' : '40px'};
           border-radius: 50%;
           border: 3px solid white;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 18px;
+          font-size: ${isPreview ? '22px' : '18px'};
           cursor: pointer;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
           transition: transform 0.2s;
-        " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-          ${order.categoryEmoji}
+          ${isPreview ? 'animation: bounce 2s infinite;' : ''}
+        " 
+        onmouseover="this.style.transform='scale(1.1)'" 
+        onmouseout="this.style.transform='scale(1)'">
+          ${order.categoryEmoji || '📍'}
         </div>
       `
 
       markerElement.addEventListener('click', () => {
-        if (onOrderClick) {
+        console.log('🖱️ [MAP] Clique no marcador:', order.id)
+        if (onOrderClick && !isPreview) {
           onOrderClick(order.id)
         }
         showOrderPopup(order)
       })
 
-      new mapboxgl.Marker(markerElement)
+      const marker = new mapboxgl.Marker(markerElement)
         .setLngLat([order.longitude, order.latitude])
         .addTo(map.current!)
+
+      markersRef.current.push(marker)
+      
+      console.log(`✅ [MAP] Marcador ${index + 1} adicionado em:`, [order.longitude, order.latitude])
     })
 
     // Adicionar marcadores de entregadores
-    drivers.forEach(driver => {
-      if (!driver.isOnline) return
+    drivers.forEach((driver, index) => {
+      if (!driver.isOnline) {
+        console.log(`⏸️ [MAP] Entregador ${driver.name} offline, pulando...`)
+        return
+      }
+
+      console.log(`🚗 [MAP] Adicionando marcador de entregador ${index + 1}:`, driver)
 
       const markerElement = document.createElement('div')
       markerElement.className = 'custom-marker driver-marker'
@@ -185,47 +233,68 @@ export function EnhancedMapbox({
       `
 
       markerElement.addEventListener('click', () => {
+        console.log('🖱️ [MAP] Clique no entregador:', driver.id)
         showDriverPopup(driver)
       })
 
-      new mapboxgl.Marker(markerElement)
+      const marker = new mapboxgl.Marker(markerElement)
         .setLngLat([driver.longitude, driver.latitude])
         .addTo(map.current!)
+
+      markersRef.current.push(marker)
     })
+
+    console.log(`✅ [MAP] Total de marcadores adicionados: ${markersRef.current.length}`)
   }
 
   const showOrderPopup = (order: OrderMarker) => {
     if (!map.current) return
 
-    const popup = new mapboxgl.Popup({ offset: 25 })
+    const isPreview = order.id === 'preview'
+    
+    const popup = new mapboxgl.Popup({ 
+      offset: 25,
+      closeButton: true,
+      closeOnClick: false
+    })
       .setLngLat([order.longitude, order.latitude])
       .setHTML(`
         <div style="padding: 12px; min-width: 200px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-            <span style="font-size: 20px;">${order.categoryEmoji}</span>
+            <span style="font-size: 20px;">${order.categoryEmoji || '📍'}</span>
             <h3 style="margin: 0; font-weight: 600; color: #333;">${order.customerName}</h3>
           </div>
           ${order.orderNumber ? `<p style="margin: 4px 0; color: #666; font-size: 14px;">Pedido #${order.orderNumber}</p>` : ''}
-          <p style="margin: 4px 0; color: #666; font-size: 14px;">Status: ${getStatusText(order.status)}</p>
-          <button 
-            onclick="assumeRoute('${order.id}')" 
-            style="
-              background: linear-gradient(45deg, #00b894, #00cec9);
-              color: white;
-              border: none;
-              padding: 8px 16px;
-              border-radius: 8px;
-              cursor: pointer;
-              font-weight: 500;
-              margin-top: 8px;
-              width: 100%;
-            "
-          >
-            🚀 Assumir Rota
-          </button>
+          <p style="margin: 4px 0; color: #666; font-size: 14px;">
+            Status: ${isPreview ? 'Preview' : getStatusText(order.status)}
+          </p>
+          ${!isPreview ? `
+            <button 
+              onclick="assumeRoute('${order.id}')" 
+              style="
+                background: linear-gradient(45deg, #00b894, #00cec9);
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 500;
+                margin-top: 8px;
+                width: 100%;
+              "
+            >
+              🚀 Assumir Rota
+            </button>
+          ` : `
+            <p style="margin: 8px 0 0 0; color: #3b82f6; font-size: 12px; font-style: italic;">
+              📍 Localização encontrada
+            </p>
+          `}
         </div>
       `)
       .addTo(map.current)
+
+    console.log('💬 [MAP] Popup exibido para:', order.customerName)
   }
 
   const showDriverPopup = (driver: DeliveryDriver) => {
@@ -268,10 +337,10 @@ export function EnhancedMapbox({
       if (!order) return
 
       try {
-        // Simular localização atual do entregador (em produção, usar geolocalização real)
+        // Simular localização atual do entregador
         const currentLocation = {
-          latitude: -18.5122 + (Math.random() - 0.5) * 0.01,
-          longitude: -44.5550 + (Math.random() - 0.5) * 0.01
+          latitude: centerLat + (Math.random() - 0.5) * 0.01,
+          longitude: centerLng + (Math.random() - 0.5) * 0.01
         }
 
         await drawRoute(currentLocation, { latitude: order.latitude, longitude: order.longitude })
@@ -284,7 +353,7 @@ export function EnhancedMapbox({
     return () => {
       delete (window as any).assumeRoute
     }
-  }, [orders])
+  }, [orders, centerLat, centerLng])
 
   const drawRoute = async (from: { latitude: number, longitude: number }, to: { latitude: number, longitude: number }) => {
     if (!map.current) return
@@ -361,6 +430,16 @@ export function EnhancedMapbox({
           0% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7); }
           70% { box-shadow: 0 0 0 10px rgba(0, 184, 148, 0); }
           100% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0); }
+        }
+        
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-10px); }
+          60% { transform: translateY(-5px); }
+        }
+        
+        .custom-marker {
+          z-index: 1000;
         }
       `}</style>
     </>

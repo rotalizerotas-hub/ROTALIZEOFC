@@ -33,21 +33,53 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
     setIsSearching(true)
 
     try {
-      console.log('🔍 [ADDRESS] Buscando endereço:', searchQuery)
+      console.log('🔍 [ADDRESS] Iniciando busca para:', searchQuery)
+
+      // Verificar se a API key está configurada
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      if (!apiKey) {
+        console.warn('⚠️ [ADDRESS] Google Maps API Key não configurada, usando geocodificação simulada')
+        
+        // Geocodificação simulada para teste
+        const simulatedResult = {
+          fullAddress: searchQuery,
+          street: 'Rua Exemplo',
+          number: '123',
+          neighborhood: 'Centro',
+          city: 'Belo Horizonte',
+          latitude: -19.9167 + (Math.random() - 0.5) * 0.01,
+          longitude: -43.9345 + (Math.random() - 0.5) * 0.01
+        }
+
+        console.log('📍 [ADDRESS] Resultado simulado:', simulatedResult)
+        onAddressFound(simulatedResult)
+        toast.success('Endereço localizado (modo simulado)')
+        return
+      }
 
       // Usar Google Maps Geocoding API
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      )
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(searchQuery)}&key=${apiKey}`
+      console.log('🌐 [ADDRESS] URL da requisição:', url.replace(apiKey, 'API_KEY_HIDDEN'))
+
+      const response = await fetch(url)
 
       if (!response.ok) {
-        throw new Error('Erro na busca do endereço')
+        throw new Error(`Erro HTTP: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('📡 [ADDRESS] Resposta da API:', data)
+
+      if (data.status === 'REQUEST_DENIED') {
+        throw new Error('API Key inválida ou sem permissões')
+      }
+
+      if (data.status === 'ZERO_RESULTS') {
+        throw new Error('Endereço não encontrado')
+      }
 
       if (data.status !== 'OK' || !data.results || data.results.length === 0) {
-        throw new Error('Endereço não encontrado')
+        throw new Error(`Erro na busca: ${data.status}`)
       }
 
       const result = data.results[0]
@@ -68,7 +100,7 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
           street = component.long_name
         } else if (types.includes('street_number')) {
           number = component.long_name
-        } else if (types.includes('sublocality') || types.includes('neighborhood')) {
+        } else if (types.includes('sublocality_level_1') || types.includes('sublocality') || types.includes('neighborhood')) {
           neighborhood = component.long_name
         } else if (types.includes('administrative_area_level_2') || types.includes('locality')) {
           city = component.long_name
@@ -88,11 +120,23 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
       console.log('✅ [ADDRESS] Dados processados:', addressData)
 
       onAddressFound(addressData)
-      toast.success('Endereço encontrado!')
+      toast.success('Endereço encontrado e marcado no mapa!')
 
     } catch (error) {
       console.error('❌ [ADDRESS] Erro na busca:', error)
-      toast.error('Erro ao buscar endereço. Tente novamente.')
+      
+      // Fornecer feedback específico baseado no erro
+      if (error instanceof Error) {
+        if (error.message.includes('API Key')) {
+          toast.error('Erro de configuração da API. Verifique a chave do Google Maps.')
+        } else if (error.message.includes('não encontrado')) {
+          toast.error('Endereço não encontrado. Tente ser mais específico.')
+        } else {
+          toast.error(`Erro na busca: ${error.message}`)
+        }
+      } else {
+        toast.error('Erro desconhecido na busca do endereço')
+      }
     } finally {
       setIsSearching(false)
     }
@@ -135,9 +179,16 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
             )}
           </Button>
         </div>
-        <p className="text-xs text-gray-500 mt-1">
-          Digite o endereço completo para busca automática
-        </p>
+        <div className="mt-2 space-y-1">
+          <p className="text-xs text-gray-500">
+            Digite o endereço completo para busca automática
+          </p>
+          {!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && (
+            <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+              ⚠️ Modo simulado - Configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY para busca real
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
