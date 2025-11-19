@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { LeafletMap } from '@/components/map/LeafletMap'
+import { GoogleMap } from '@/components/map/GoogleMap'
 import { 
   Package, 
   Users, 

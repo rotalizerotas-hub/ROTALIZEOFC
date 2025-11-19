@@ -11,8 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
-import { AddressSearch } from '@/components/map/AddressSearch'
-import { LeafletMap } from '@/components/map/LeafletMap'
+import { GoogleAddressSearch } from '@/components/map/GoogleAddressSearch'
+import { GoogleMap } from '@/components/map/GoogleMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, DollarSign, MapPin, CheckCircle } from 'lucide-react'
@@ -501,7 +501,7 @@ export function ManualOrderForm() {
             <CardContent className="space-y-6">
               
               {/* Busca de Endereço */}
-              <AddressSearch 
+              <GoogleAddressSearch 
                 onAddressFound={handleAddressFound}
                 disabled={loading}
               />
@@ -575,12 +575,13 @@ export function ManualOrderForm() {
                   Localização no Mapa
                 </Label>
                 <div className="h-96 rounded-2xl overflow-hidden border border-gray-200">
-                  <LeafletMap
+                  <GoogleMap
                     orders={mapOrders}
                     centerLat={addressCoordinates?.latitude}
                     centerLng={addressCoordinates?.longitude}
                     zoom={addressCoordinates ? 17 : 12}
                     className="w-full h-full"
+                    height="100%"
                   />
                 </div>
                 {addressCoordinates && (
@@ -743,6 +744,7 @@ export function ManualOrderForm() {
                         <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
                           value={newProductPriceDisplay}
+                
                           onChange={(e) => handlePriceChange(e.target.value)}
                           placeholder="0,00"
                           className="rounded-xl w-32 pl-10 text-right font-mono"
