@@ -1,21 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Configuração para funcionar no ambiente Lasy
-  assetPrefix: "",
-  basePath: "",
-  // Desabilitar strict mode para compatibilidade
+  // Configuração básica para funcionamento
   reactStrictMode: false,
-
-  // Configurações para melhor compatibilidade de deploy (baseado na v0)
+  
+  // Configurações de build
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+  
+  // Configurações de imagem
   images: {
     unoptimized: true,
   },
-};
+  
+  // Configurações experimentais
+  experimental: {
+    serverComponentsExternalPackages: ["@supabase/supabase-js"],
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
