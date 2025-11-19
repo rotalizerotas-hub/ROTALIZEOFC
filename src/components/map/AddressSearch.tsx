@@ -43,7 +43,6 @@ export function AddressSearch({ onAddressFound, disabled = false }: AddressSearc
 
       if (!response.ok) {
         throw new Error('Erro na busca de endereço')
-      
       }
 
       const data = await response.json()

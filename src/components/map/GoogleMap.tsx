@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Loader } from '@googlemaps/js-api-loader'
 import { config } from '@/lib/config'
 
 interface OrderMarker {
@@ -67,6 +66,40 @@ const getStatusText = (status: string): string => {
   return statusMap[status] || status
 }
 
+// Função para carregar Google Maps API
+const loadGoogleMapsAPI = (apiKey: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    // Verificar se já está carregado
+    if (window.google && window.google.maps) {
+      resolve()
+      return
+    }
+
+    // Verificar se já existe um script carregando
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
+    if (existingScript) {
+      existingScript.addEventListener('load', () => resolve())
+      existingScript.addEventListener('error', reject)
+      return
+    }
+
+    // Criar script
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry&callback=initGoogleMaps`
+    script.async = true
+    script.defer = true
+
+    // Callback global
+    ;(window as any).initGoogleMaps = () => {
+      resolve()
+      delete (window as any).initGoogleMaps
+    }
+
+    script.addEventListener('error', reject)
+    document.head.appendChild(script)
+  })
+}
+
 export function GoogleMap({ 
   orders = [], 
   drivers = [], 
@@ -90,19 +123,15 @@ export function GoogleMap({
       return
     }
 
-    const loader = new Loader({
-      apiKey: config.googleMaps.apiKey,
-      version: 'weekly',
-      libraries: ['places', 'geometry']
-    })
-
-    loader.load().then(() => {
-      console.log('✅ [GOOGLE MAPS] API carregada com sucesso')
-      setIsLoaded(true)
-    }).catch((error) => {
-      console.error('❌ [GOOGLE MAPS] Erro ao carregar API:', error)
-      setError('Erro ao carregar Google Maps')
-    })
+    loadGoogleMapsAPI(config.googleMaps.apiKey)
+      .then(() => {
+        console.log('✅ [GOOGLE MAPS] API carregada com sucesso')
+        setIsLoaded(true)
+      })
+      .catch((error) => {
+        console.error('❌ [GOOGLE MAPS] Erro ao carregar API:', error)
+        setError('Erro ao carregar Google Maps')
+      })
   }, [])
 
   // Inicializar mapa
@@ -151,30 +180,24 @@ export function GoogleMap({
     const isPreview = order.id === 'preview'
     const backgroundColor = getStatusColor(isPreview ? 'preview' : order.status)
     
-    const markerElement = document.createElement('div')
-    markerElement.innerHTML = `
-      <div style="
-        background: ${backgroundColor};
-        width: ${isPreview ? '50px' : '40px'};
-        height: ${isPreview ? '50px' : '40px'};
-        border-radius: 50%;
-        border: 3px solid white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: ${isPreview ? '22px' : '18px'};
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        ${isPreview ? 'animation: bounce 2s infinite;' : ''}
-      ">
-        ${order.categoryEmoji || '📍'}
-      </div>
-    `
+    // Criar ícone customizado usando SVG
+    const svgIcon = {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="${isPreview ? '50' : '40'}" height="${isPreview ? '50' : '40'}" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="${isPreview ? '25' : '20'}" cy="${isPreview ? '25' : '20'}" r="${isPreview ? '22' : '17'}" 
+                  fill="${backgroundColor}" stroke="white" stroke-width="3"/>
+          <text x="50%" y="50%" text-anchor="middle" dy="0.3em" 
+                font-size="${isPreview ? '22' : '18'}" fill="black">${order.categoryEmoji || '📍'}</text>
+        </svg>
+      `)}`,
+      scaledSize: new google.maps.Size(isPreview ? 50 : 40, isPreview ? 50 : 40),
+      anchor: new google.maps.Point(isPreview ? 25 : 20, isPreview ? 50 : 40)
+    }
 
-    const marker = new google.maps.marker.AdvancedMarkerElement({
-      map,
+    const marker = new google.maps.Marker({
       position: { lat: order.latitude, lng: order.longitude },
-      content: markerElement,
+      map: map,
+      icon: svgIcon,
       title: order.customerName
     })
 
@@ -221,7 +244,7 @@ export function GoogleMap({
     })
 
     // Adicionar evento de clique
-    markerElement.addEventListener('click', () => {
+    marker.addListener('click', () => {
       console.log('🖱️ [GOOGLE MAPS] Clique no marcador:', order.id)
       infoWindow.open(map, marker)
       if (onOrderClick && !isPreview) {
@@ -236,30 +259,23 @@ export function GoogleMap({
   const createDriverMarker = useCallback((driver: DeliveryDriver) => {
     if (!map || !driver.isOnline) return null
 
-    const markerElement = document.createElement('div')
-    markerElement.innerHTML = `
-      <div style="
-        background: #00b894;
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        border: 2px solid white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        cursor: pointer;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        animation: pulse 2s infinite;
-      ">
-        ${getVehicleIcon(driver.vehicleType)}
-      </div>
-    `
+    // Criar ícone customizado para entregador
+    const svgIcon = {
+      url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+        <svg width="35" height="35" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="17.5" cy="17.5" r="15" fill="#00b894" stroke="white" stroke-width="2"/>
+          <text x="50%" y="50%" text-anchor="middle" dy="0.3em" 
+                font-size="16" fill="white">${getVehicleIcon(driver.vehicleType)}</text>
+        </svg>
+      `)}`,
+      scaledSize: new google.maps.Size(35, 35),
+      anchor: new google.maps.Point(17, 35)
+    }
 
-    const marker = new google.maps.marker.AdvancedMarkerElement({
-      map,
+    const marker = new google.maps.Marker({
       position: { lat: driver.latitude, lng: driver.longitude },
-      content: markerElement,
+      map: map,
+      icon: svgIcon,
       title: driver.name
     })
 
@@ -279,7 +295,7 @@ export function GoogleMap({
       `
     })
 
-    markerElement.addEventListener('click', () => {
+    marker.addListener('click', () => {
       infoWindow.open(map, marker)
     })
 
@@ -302,7 +318,7 @@ export function GoogleMap({
     orders.forEach(order => {
       const marker = createOrderMarker(order)
       if (marker) {
-        markersRef.current.push(marker as any)
+        markersRef.current.push(marker)
       }
     })
 
@@ -310,7 +326,7 @@ export function GoogleMap({
     drivers.forEach(driver => {
       const marker = createDriverMarker(driver)
       if (marker) {
-        markersRef.current.push(marker as any)
+        markersRef.current.push(marker)
       }
     })
 

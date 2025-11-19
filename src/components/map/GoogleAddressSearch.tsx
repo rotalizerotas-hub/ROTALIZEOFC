@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Loader } from '@googlemaps/js-api-loader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,26 +28,39 @@ export function GoogleAddressSearch({ onAddressFound, disabled = false }: Google
   const inputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
 
-  // Carregar Google Maps API
+  // Verificar se Google Maps está carregado
   useEffect(() => {
-    if (!config.googleMaps.apiKey) {
-      console.error('❌ [GOOGLE PLACES] Chave da API não configurada')
-      return
+    const checkGoogleMaps = () => {
+      if (window.google && window.google.maps && window.google.maps.places) {
+        console.log('✅ [GOOGLE PLACES] API disponível')
+        setIsLoaded(true)
+        return true
+      }
+      return false
     }
 
-    const loader = new Loader({
-      apiKey: config.googleMaps.apiKey,
-      version: 'weekly',
-      libraries: ['places']
-    })
+    if (checkGoogleMaps()) return
 
-    loader.load().then(() => {
-      console.log('✅ [GOOGLE PLACES] API carregada com sucesso')
-      setIsLoaded(true)
-    }).catch((error) => {
-      console.error('❌ [GOOGLE PLACES] Erro ao carregar API:', error)
-    })
-  }, [])
+    // Aguardar carregamento
+    const interval = setInterval(() => {
+      if (checkGoogleMaps()) {
+        clearInterval(interval)
+      }
+    }, 100)
+
+    // Timeout após 10 segundos
+    const timeout = setTimeout(() => {
+      clearInterval(interval)
+      if (!isLoaded) {
+        console.warn('⚠️ [GOOGLE PLACES] Timeout ao aguardar API')
+      }
+    }, 10000)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeout)
+    }
+  }, [isLoaded])
 
   // Inicializar Autocomplete
   useEffect(() => {
