@@ -67,30 +67,3 @@
     @apply bg-background text-foreground;
   }
 }
-
-/* Estilos customizados para Google Maps */
-.gm-style {
-  font-family: inherit !important;
-}
-
-.gm-style .gm-style-iw-c {
-  border-radius: 12px !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
-}
-
-.gm-style .gm-style-iw-t::after {
-  background: white !important;
-}
-
-/* Animações para marcadores */
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(0, 184, 148, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 184, 148, 0); }
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-10px); }
-  60% { transform: translateY(-5px); }
-}
