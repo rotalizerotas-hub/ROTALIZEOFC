@@ -4,7 +4,7 @@ import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { Dashboard } from '@/components/dashboard/Dashboard'
 
-export default function Home() {
+export default function HomePage() {
   const { user, loading } = useAuth()
 
   if (loading) {
