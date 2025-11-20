@@ -7,34 +7,42 @@ import { Package2, Sparkles } from 'lucide-react'
 
 export function LoginForm() {
   return (
-    <div className="min-h-screen bg-primary-gradient-soft flex items-center justify-center p-4">
-      <div className="w-full max-w-md animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{
+      background: 'linear-gradient(135deg, rgba(30, 64, 175, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)'
+    }}>
+      <div className="w-full max-w-md space-y-8">
         {/* Logo e Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-primary-gradient rounded-2xl shadow-xl mb-6 relative overflow-hidden">
-            <Package2 className="w-10 h-10 text-white relative z-10" />
-            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+        <div className="text-center">
+          <div className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-6 shadow-xl" style={{
+            background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
+          }}>
+            <Package2 className="w-10 h-10 text-white" />
           </div>
           
-          <h1 className="text-heading-1 text-primary-gradient mb-2">
+          <h1 className="text-4xl font-bold mb-2" style={{
+            background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}>
             RotaLize
           </h1>
           
-          <p className="text-body text-gray-600">
+          <p className="text-gray-600 text-lg mb-4">
             Sistema Inteligente de Gestão de Entregas
           </p>
           
-          <div className="flex items-center justify-center gap-2 mt-3">
+          <div className="flex items-center justify-center gap-2">
             <Sparkles className="w-4 h-4 text-yellow-500" />
-            <span className="text-caption text-gray-500">Versão Profissional</span>
+            <span className="text-sm text-gray-500 uppercase tracking-wide">Versão Profissional</span>
           </div>
         </div>
 
         {/* Card de Login */}
-        <div className="card card-elevated glass p-8 mb-6">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="mb-6">
-            <h2 className="text-heading-3 text-gray-800 mb-2">Bem-vindo de volta</h2>
-            <p className="text-body-sm text-gray-600">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Bem-vindo de volta</h2>
+            <p className="text-gray-600">
               Acesse sua conta para gerenciar suas entregas
             </p>
           </div>
@@ -97,38 +105,6 @@ export function LoginForm() {
                     inputBorderHover: '#d1d5db',
                     inputBorderFocus: '#1e40af',
                   },
-                  space: {
-                    spaceSmall: '4px',
-                    spaceMedium: '8px',
-                    spaceLarge: '16px',
-                    labelBottomMargin: '6px',
-                    anchorBottomMargin: '4px',
-                    emailInputSpacing: '4px',
-                    socialAuthSpacing: '4px',
-                    buttonPadding: '14px 24px',
-                    inputPadding: '14px 16px',
-                  },
-                  fontSizes: {
-                    baseBodySize: '14px',
-                    baseInputSize: '14px',
-                    baseLabelSize: '14px',
-                    baseButtonSize: '14px',
-                  },
-                  fonts: {
-                    bodyFontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
-                    buttonFontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
-                    inputFontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
-                    labelFontFamily: `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`,
-                  },
-                  borderWidths: {
-                    buttonBorderWidth: '0px',
-                    inputBorderWidth: '1px',
-                  },
-                  radii: {
-                    borderRadiusButton: '12px',
-                    buttonBorderRadius: '12px',
-                    inputBorderRadius: '12px',
-                  },
                 },
               },
             }}
@@ -140,7 +116,6 @@ export function LoginForm() {
                   password_label: 'Senha',
                   button_label: 'Entrar',
                   loading_button_label: 'Entrando...',
-                  social_provider_text: 'Entrar com {{provider}}',
                   link_text: 'Já tem uma conta? Entre aqui',
                 },
                 sign_up: {
@@ -148,7 +123,6 @@ export function LoginForm() {
                   password_label: 'Senha',
                   button_label: 'Criar conta',
                   loading_button_label: 'Criando conta...',
-                  social_provider_text: 'Criar conta com {{provider}}',
                   link_text: 'Não tem uma conta? Crie aqui',
                   confirmation_text: 'Verifique seu email para confirmar sua conta',
                 },
@@ -165,12 +139,12 @@ export function LoginForm() {
         </div>
 
         {/* Footer */}
-        <div className="text-center">
-          <p className="text-body-sm text-gray-500 mb-4">
+        <div className="text-center space-y-4">
+          <p className="text-gray-500">
             Plataforma segura e confiável para sua empresa
           </p>
           
-          <div className="flex items-center justify-center gap-6 text-caption text-gray-400">
+          <div className="flex items-center justify-center gap-6 text-xs text-gray-400 uppercase tracking-wide">
             <span>Suporte 24/7</span>
             <span>•</span>
             <span>Dados Protegidos</span>

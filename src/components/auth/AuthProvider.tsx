@@ -1,9 +1,8 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { toast } from 'sonner'
+import type { User } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
@@ -31,43 +30,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Verificar sessão atual
-    const getSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        setUser(session?.user ?? null)
-      } catch (error) {
-        console.error('Erro ao verificar sessão:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    getSession()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
 
     // Escutar mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user ?? null)
-        setLoading(false)
-
-        if (event === 'SIGNED_IN') {
-          toast.success('Login realizado com sucesso!')
-        } else if (event === 'SIGNED_OUT') {
-          toast.success('Logout realizado com sucesso!')
-        }
-      }
-    )
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
 
     return () => subscription.unsubscribe()
   }, [])
 
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error)
-      toast.error('Erro ao fazer logout')
-    }
+    await supabase.auth.signOut()
   }
 
   return (

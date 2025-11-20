@@ -1,28 +1,53 @@
 'use client'
 
-import { useAuth } from '@/components/auth/AuthProvider'
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { Dashboard } from '@/components/dashboard/Dashboard'
+import { AuthProvider } from '@/components/auth/AuthProvider'
+import { Toaster } from 'sonner'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  return (
+    <AuthProvider>
+      <main className="min-h-screen">
+        <AppContent />
+        <Toaster position="top-right" />
+      </main>
+    </AuthProvider>
+  )
+}
+
+function AppContent() {
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Verificar sessão atual
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    // Escutar mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
-            <span className="text-2xl font-bold text-white">R</span>
-          </div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return <LoginForm />
-  }
-
-  return <Dashboard />
+  return user ? <Dashboard /> : <LoginForm />
 }
