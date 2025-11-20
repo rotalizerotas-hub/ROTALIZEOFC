@@ -7,16 +7,6 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  experimental: {
-    turbo: {
-      rules: {
-        '*.css': {
-          loaders: ['css-loader'],
-          as: '*.css',
-        },
-      },
-    },
-  },
 }
 
 module.exports = nextConfig
