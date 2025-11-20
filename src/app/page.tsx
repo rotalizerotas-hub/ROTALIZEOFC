@@ -9,14 +9,20 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full loading mx-auto mb-4"></div>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
+            <span className="text-2xl font-bold text-white">R</span>
+          </div>
           <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     )
   }
 
-  return user ? <Dashboard /> : <LoginForm />
+  if (!user) {
+    return <LoginForm />
+  }
+
+  return <Dashboard />
 }

@@ -1,53 +1,158 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/components/auth/AuthProvider'
+import { MapboxMap } from '@/components/map/MapboxMap'
 import { Button } from '@/components/ui/button'
-import { 
-  Package, 
-  Users, 
-  MapPin, 
-  TrendingUp, 
-  Plus, 
-  Bell,
-  Search,
-  Activity,
-  Clock,
-  CheckCircle,
-  User,
-  LogOut,
-  BarChart3,
-  Truck,
-  DollarSign
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/components/auth/AuthProvider'
+import { supabase } from '@/lib/supabase'
+import { Plus, Users, Map, Package, TrendingUp, FileText } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+
+interface Organization {
+  id: string
+  name: string
+  latitude: number
+  longitude: number
+  establishment_types: {
+    name: string
+    icon_url: string
+    emoji: string
+  }
+}
+
+interface Order {
+  id: string
+  customer_name: string
+  delivery_latitude: number
+  delivery_longitude: number
+  status: string
+  value: number
+  created_at: string
+}
+
+interface DashboardData {
+  organizations: Array<{
+    id: string
+    name: string
+    latitude: number
+    longitude: number
+    establishment_type: {
+      name: string
+      icon_url: string
+      emoji: string
+    }
+  }>
+  orders: Order[]
+  stats: {
+    totalOrders: number
+    pendingOrders: number
+    activeDrivers: number
+    todayRevenue: number
+  }
+}
 
 export function Dashboard() {
   const { user, signOut } = useAuth()
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    activeDrivers: 0,
-    pendingOrders: 0,
-    todayRevenue: 0
+  const router = useRouter()
+  const [data, setData] = useState<DashboardData>({
+    organizations: [],
+    orders: [],
+    stats: {
+      totalOrders: 0,
+      pendingOrders: 0,
+      activeDrivers: 0,
+      todayRevenue: 0
+    }
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadDashboardData()
-  }, [])
+  }, [user])
 
   const loadDashboardData = async () => {
+    if (!user) return
+
     try {
-      // Simular dados
-      setStats({
-        totalOrders: 156,
-        activeDrivers: 8,
-        pendingOrders: 12,
-        todayRevenue: 2847.50
+      // Buscar organizações do usuário
+      const { data: userOrgs } = await supabase
+        .from('user_organizations')
+        .select(`
+          organization_id,
+          organizations (
+            id,
+            name,
+            latitude,
+            longitude,
+            establishment_types (
+              name,
+              icon_url,
+              emoji
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+
+      const organizations = userOrgs?.map((uo: any) => ({
+        id: uo.organizations.id,
+        name: uo.organizations.name,
+        latitude: uo.organizations.latitude,
+        longitude: uo.organizations.longitude,
+        establishment_type: uo.organizations.establishment_types || {
+          name: 'Estabelecimento',
+          icon_url: '/icons/default.png',
+          emoji: '🏪'
+        }
+      })) || []
+
+      // Buscar pedidos das organizações
+      const orgIds = organizations.map(org => org.id)
+      let orders: Order[] = []
+      
+      if (orgIds.length > 0) {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('*')
+          .in('organization_id', orgIds)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        orders = ordersData || []
+      }
+
+      // Calcular estatísticas
+      const today = new Date().toISOString().split('T')[0]
+      const todayOrders = orders.filter(order => 
+        order.created_at.startsWith(today)
+      )
+
+      let activeDriversCount = 0
+      if (orgIds.length > 0) {
+        const { data: activeDrivers } = await supabase
+          .from('delivery_drivers')
+          .select('id')
+          .in('organization_id', orgIds)
+          .eq('is_online', true)
+
+        activeDriversCount = activeDrivers?.length || 0
+      }
+
+      const stats = {
+        totalOrders: orders.length,
+        pendingOrders: orders.filter(o => o.status === 'pending').length,
+        activeDrivers: activeDriversCount,
+        todayRevenue: todayOrders.reduce((sum, order) => sum + order.value, 0)
+      }
+
+      setData({
+        organizations,
+        orders,
+        stats
       })
     } catch (error) {
-      console.error('Erro ao carregar dados:', error)
-      toast.error('Erro ao carregar dados')
+      console.error('Erro ao carregar dados do dashboard:', error)
     } finally {
       setLoading(false)
     }
@@ -55,219 +160,211 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando dashboard...</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
+            <span className="text-2xl font-bold text-white">R</span>
+          </div>
+          <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Moderno */}
-      <header className="header-modern">
-        <div className="container-modern">
-          <div className="header-content-modern">
-            {/* Logo */}
-            <div className="logo-modern">
-              <div className="logo-icon-modern hover-lift">
-                <Package className="w-6 h-6" />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
+                <span className="text-xl font-bold text-white">R</span>
               </div>
               <div>
-                <div className="logo-text-modern">RotaLize</div>
-                <div className="logo-subtitle-modern">Dashboard</div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+                  Rotalize
+                </h1>
+                <p className="text-sm text-gray-600">Dashboard</p>
               </div>
             </div>
-
-            {/* Ações do Header */}
-            <div className="flex items-center gap-4">
-              {/* Busca */}
-              <div className="hidden md:flex items-center gap-2 bg-gray-100 rounded-xl px-4 py-2">
-                <Search className="w-4 h-4 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Buscar pedidos..." 
-                  className="bg-transparent border-none outline-none text-sm w-48"
-                />
-              </div>
-              
-              {/* Notificações */}
-              <button className="relative p-3 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-all">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
-              
-              {/* Menu do Usuário */}
-              <div className="flex items-center gap-3 pl-3 border-l border-gray-200">
-                <div className="hidden sm:block text-right">
-                  <p className="text-sm font-medium text-gray-800">{user?.email?.split('@')[0]}</p>
-                  <p className="text-xs text-gray-500">Administrador</p>
-                </div>
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl flex items-center justify-center hover-lift">
-                  <User className="w-5 h-5 text-white" />
-                </div>
-                <button 
-                  onClick={signOut}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100 transition-all"
-                  title="Sair"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">
+                Olá, {user?.email}
+              </span>
+              <Button 
+                variant="outline" 
+                onClick={signOut}
+                className="rounded-xl"
+              >
+                Sair
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Conteúdo Principal */}
-      <main className="container-modern page-content-modern">
-        {/* Título da Página */}
-        <div className="section-header-modern">
-          <h2 className="text-heading-1 mb-3">Visão Geral</h2>
-          <p className="text-body-lg">
-            Acompanhe o desempenho das suas entregas em tempo real
-          </p>
-        </div>
-
-        {/* Cards de Estatísticas */}
-        <div className="grid-modern grid-4-modern mb-12">
-          <div className="stat-card-modern hover-lift">
-            <div className="stat-icon-modern bg-blue-100">
-              <Package className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="stat-number-modern text-blue-600">{stats.totalOrders}</div>
-            <div className="stat-label-modern">Total de Pedidos</div>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <TrendingUp className="w-3 h-3 text-green-500" />
-              <span className="text-xs text-green-600">+12% vs ontem</span>
-            </div>
-          </div>
-
-          <div className="stat-card-modern hover-lift">
-            <div className="stat-icon-modern bg-green-100">
-              <Users className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="stat-number-modern text-green-600">{stats.activeDrivers}</div>
-            <div className="stat-label-modern">Entregadores Ativos</div>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <Activity className="w-3 h-3 text-green-500" />
-              <span className="text-xs text-green-600">Online agora</span>
-            </div>
-          </div>
-
-          <div className="stat-card-modern hover-lift">
-            <div className="stat-icon-modern bg-yellow-100">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
-            <div className="stat-number-modern text-yellow-600">{stats.pendingOrders}</div>
-            <div className="stat-label-modern">Pedidos Pendentes</div>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <Clock className="w-3 h-3 text-yellow-500" />
-              <span className="text-xs text-yellow-600">Aguardando</span>
-            </div>
-          </div>
-
-          <div className="stat-card-modern hover-lift">
-            <div className="stat-icon-modern bg-purple-100">
-              <DollarSign className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="stat-number-modern text-purple-600">R$ {stats.todayRevenue.toFixed(2)}</div>
-            <div className="stat-label-modern">Receita Hoje</div>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <TrendingUp className="w-3 h-3 text-purple-500" />
-              <span className="text-xs text-purple-600">+8% vs ontem</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Ações Rápidas */}
-        <div className="section-modern">
-          <h3 className="text-heading-2 mb-8">Ações Rápidas</h3>
-
-          <div className="grid-modern grid-3-modern">
-            <div className="card-modern hover-lift p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl flex items-center justify-center hover-scale">
-                  <Plus className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-1">Novo Pedido</h4>
-                  <p className="text-sm text-gray-600">Criar pedido de entrega</p>
-                </div>
+      <div className="container mx-auto px-4 py-6">
+        {/* Estatísticas */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Total de Pedidos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-gray-900">
+                {data.stats.totalOrders}
               </div>
-              <Button className="w-full">
-                Criar Pedido
-              </Button>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="card-modern hover-lift p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center hover-scale">
-                  <MapPin className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-1">Mapa ao Vivo</h4>
-                  <p className="text-sm text-gray-600">Rastrear entregas em tempo real</p>
-                </div>
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <Package className="w-4 h-4 text-yellow-500" />
+                Pedidos Pendentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-yellow-600">
+                {data.stats.pendingOrders}
               </div>
-              <Button variant="secondary" className="w-full">
-                Ver Mapa
-              </Button>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="card-modern hover-lift p-6">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center hover-scale">
-                  <Users className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-1">Equipe</h4>
-                  <p className="text-sm text-gray-600">Gerenciar entregadores</p>
-                </div>
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <Users className="w-4 h-4 text-green-500" />
+                Entregadores Online
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600">
+                {data.stats.activeDrivers}
               </div>
-              <Button variant="secondary" className="w-full">
-                Gerenciar
-              </Button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-blue-500" />
+                Receita Hoje
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600">
+                R$ {data.stats.todayRevenue.toFixed(2)}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Status do Sistema */}
-        <div className="card-modern p-8">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-heading-2">Status do Sistema</h3>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-green-600 font-medium">Todos os sistemas operacionais</span>
-            </div>
-          </div>
-          
-          <div className="grid-modern grid-4-modern">
-            <div className="text-center p-4">
-              <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-900 mb-1">API</p>
-              <p className="text-xs text-green-600 uppercase tracking-wide">Operacional</p>
-            </div>
-            <div className="text-center p-4">
-              <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-900 mb-1">Banco de Dados</p>
-              <p className="text-xs text-green-600 uppercase tracking-wide">Operacional</p>
-            </div>
-            <div className="text-center p-4">
-              <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-900 mb-1">Notificações</p>
-              <p className="text-xs text-green-600 uppercase tracking-wide">Operacional</p>
-            </div>
-            <div className="text-center p-4">
-              <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-900 mb-1">Pagamentos</p>
-              <p className="text-xs text-green-600 uppercase tracking-wide">Operacional</p>
-            </div>
-          </div>
+        {/* Botões de Ação */}
+        <div className="flex flex-wrap gap-4 mb-8">
+          <Button 
+            onClick={() => router.push('/novo-pedido-manual')}
+            className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3"
+          >
+            <FileText className="w-5 h-5 mr-2" />
+            Novo Pedido Manual
+          </Button>
+          <Button 
+            onClick={() => router.push('/entregadores')}
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Users className="w-5 h-5 mr-2" />
+            Entregadores
+          </Button>
+          <Button 
+            onClick={() => router.push('/clientes')}
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Users className="w-5 h-5 mr-2" />
+            Clientes
+          </Button>
+          <Button 
+            onClick={() => router.push('/produtos')}
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Package className="w-5 h-5 mr-2" />
+            Produtos
+          </Button>
+          <Button 
+            variant="outline"
+            className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
+          >
+            <Map className="w-5 h-5 mr-2" />
+            Ver Mapa Completo
+          </Button>
         </div>
-      </main>
+
+        {/* Mapa Principal */}
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-2xl rounded-3xl overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-gray-800">
+              Mapa de Entregas
+            </CardTitle>
+            <CardDescription>
+              Visualize suas organizações e pedidos em tempo real
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="h-96">
+              <MapboxMap 
+                organizations={data.organizations}
+                orders={data.orders}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Lista de Pedidos Recentes */}
+        <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl mt-8">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold text-gray-800">
+              Pedidos Recentes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {data.orders.slice(0, 5).map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{order.customer_name}</h4>
+                    <p className="text-sm text-gray-600">R$ {order.value.toFixed(2)}</p>
+                  </div>
+                  <Badge 
+                    variant={
+                      order.status === 'delivered' ? 'default' :
+                      order.status === 'pending' ? 'secondary' :
+                      order.status === 'in_transit' ? 'outline' : 'destructive'
+                    }
+                    className="rounded-full"
+                  >
+                    {order.status === 'pending' ? 'Pendente' :
+                     order.status === 'assigned' ? 'Atribuído' :
+                     order.status === 'in_transit' ? 'Em trânsito' :
+                     order.status === 'delivered' ? 'Entregue' : 'Cancelado'}
+                  </Badge>
+                </div>
+              ))}
+              {data.orders.length === 0 && (
+                <p className="text-center text-gray-500 py-8">
+                  Nenhum pedido encontrado
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

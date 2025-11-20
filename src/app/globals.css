@@ -2,621 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design System Moderno - RotaLize */
-:root {
-  /* Cores Principais */
-  --primary-blue: #2563eb;
-  --primary-green: #059669;
-  --primary-gradient: linear-gradient(135deg, #2563eb 0%, #059669 100%);
-  
-  /* Paleta Azul */
-  --blue-50: #eff6ff;
-  --blue-100: #dbeafe;
-  --blue-500: #3b82f6;
-  --blue-600: #2563eb;
-  --blue-700: #1d4ed8;
-  
-  /* Paleta Verde */
-  --green-50: #ecfdf5;
-  --green-100: #d1fae5;
-  --green-500: #10b981;
-  --green-600: #059669;
-  --green-700: #047857;
-  
-  /* Neutros Modernos */
-  --gray-25: #fcfcfd;
-  --gray-50: #f9fafb;
-  --gray-100: #f3f4f6;
-  --gray-200: #e5e7eb;
-  --gray-300: #d1d5db;
-  --gray-400: #9ca3af;
-  --gray-500: #6b7280;
-  --gray-600: #4b5563;
-  --gray-700: #374151;
-  --gray-800: #1f2937;
-  --gray-900: #111827;
-  
-  /* Sombras Modernas */
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  
-  /* Bordas Arredondadas */
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
-  
-  /* Espaçamentos Fluidos */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-  --space-16: 4rem;
-}
+@layer base {
+  :root {
+    --background: 0 0% 100%;
 
-/* Reset Moderno */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+    --foreground: 0 0% 3.9%;
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.6;
-  color: var(--gray-800);
-  background: var(--gray-25);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+    --card: 0 0% 100%;
 
-/* Tipografia Harmoniosa */
-.text-display {
-  font-size: clamp(2.5rem, 5vw, 3.5rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+    --card-foreground: 0 0% 3.9%;
 
-.text-heading-1 {
-  font-size: clamp(1.875rem, 4vw, 2.25rem);
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--gray-900);
-}
+    --popover: 0 0% 100%;
 
-.text-heading-2 {
-  font-size: clamp(1.5rem, 3vw, 1.875rem);
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--gray-800);
-}
+    --popover-foreground: 0 0% 3.9%;
 
-.text-heading-3 {
-  font-size: clamp(1.25rem, 2.5vw, 1.5rem);
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--gray-800);
-}
+    --primary: 0 0% 9%;
 
-.text-body-lg {
-  font-size: 1.125rem;
-  font-weight: 400;
-  line-height: 1.7;
-  color: var(--gray-700);
-}
+    --primary-foreground: 0 0% 98%;
 
-.text-body {
-  font-size: 1rem;
-  font-weight: 400;
-  line-height: 1.6;
-  color: var(--gray-600);
-}
+    --secondary: 0 0% 96.1%;
 
-.text-body-sm {
-  font-size: 0.875rem;
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--gray-500);
-}
+    --secondary-foreground: 0 0% 9%;
 
-.text-caption {
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.4;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--gray-400);
-}
+    --muted: 0 0% 96.1%;
 
-/* Cards Modernos */
-.card-modern {
-  background: white;
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--gray-100);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-}
+    --muted-foreground: 0 0% 45.1%;
 
-.card-modern:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--gray-200);
-}
+    --accent: 0 0% 96.1%;
 
-.card-elevated {
-  background: white;
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--gray-100);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
+    --accent-foreground: 0 0% 9%;
 
-.card-elevated:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-xl);
-}
+    --destructive: 0 84.2% 60.2%;
 
-.card-glass {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-lg);
-}
+    --destructive-foreground: 0 0% 98%;
 
-/* Botões Arredondados Modernos */
-.btn-modern {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--radius-xl);
-  font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  border: none;
-  text-decoration: none;
-  position: relative;
-  overflow: hidden;
-}
+    --border: 0 0% 89.8%;
 
-.btn-modern:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
-}
+    --input: 0 0% 89.8%;
 
-.btn-primary-modern {
-  background: var(--primary-gradient);
-  color: white;
-  box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.3);
-}
+    --ring: 0 0% 3.9%;
 
-.btn-primary-modern:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px 0 rgba(37, 99, 235, 0.4);
-}
+    --chart-1: 12 76% 61%;
 
-.btn-secondary-modern {
-  background: white;
-  color: var(--gray-700);
-  border: 1.5px solid var(--gray-200);
-  box-shadow: var(--shadow-xs);
-}
+    --chart-2: 173 58% 39%;
 
-.btn-secondary-modern:hover:not(:disabled) {
-  background: var(--gray-50);
-  border-color: var(--gray-300);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
+    --chart-3: 197 37% 24%;
 
-.btn-ghost-modern {
-  background: transparent;
-  color: var(--gray-600);
-  border: 1px solid transparent;
-}
+    --chart-4: 43 74% 66%;
 
-.btn-ghost-modern:hover:not(:disabled) {
-  background: var(--gray-100);
-  color: var(--gray-800);
-}
+    --chart-5: 27 87% 67%;
 
-.btn-sm-modern {
-  padding: var(--space-2) var(--space-4);
-  font-size: 0.75rem;
-  border-radius: var(--radius-lg);
-}
+    --radius: 0.5rem;
 
-.btn-lg-modern {
-  padding: var(--space-4) var(--space-8);
-  font-size: 1rem;
-  border-radius: var(--radius-2xl);
-}
+    --sidebar-background: 0 0% 98%;
 
-/* Inputs Modernos */
-.input-modern {
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  border: 1.5px solid var(--gray-200);
-  border-radius: var(--radius-xl);
-  font-size: 0.875rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: white;
-  color: var(--gray-900);
-}
+    --sidebar-foreground: 240 5.3% 26.1%;
 
-.input-modern::placeholder {
-  color: var(--gray-400);
-}
+    --sidebar-primary: 240 5.9% 10%;
 
-.input-modern:focus {
-  outline: none;
-  border-color: var(--primary-blue);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-  transform: translateY(-1px);
-}
+    --sidebar-primary-foreground: 0 0% 98%;
 
-.input-with-icon {
-  padding-left: var(--space-10);
-}
+    --sidebar-accent: 240 4.8% 95.9%;
 
-.input-icon {
-  position: absolute;
-  left: var(--space-3);
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--gray-400);
-  transition: color 0.2s;
-}
+    --sidebar-accent-foreground: 240 5.9% 10%;
 
-.input-modern:focus + .input-icon,
-.input-modern:focus ~ .input-icon {
-  color: var(--primary-blue);
-}
+    --sidebar-border: 220 13% 91%;
 
-/* Header Moderno */
-.header-modern {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--gray-100);
-  box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.header-content-modern {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 4.5rem;
-  padding: 0 var(--space-6);
-  max-width: 1280px;
-  margin: 0 auto;
-}
-
-/* Logo Moderno */
-.logo-modern {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.logo-icon-modern {
-  width: 2.75rem;
-  height: 2.75rem;
-  background: var(--primary-gradient);
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
-  box-shadow: var(--shadow-md);
-}
-
-.logo-text-modern {
-  font-size: 1.5rem;
-  font-weight: 800;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.logo-subtitle-modern {
-  font-size: 0.75rem;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
-}
-
-/* Stats Cards Modernos */
-.stat-card-modern {
-  background: white;
-  padding: var(--space-6);
-  border-radius: var(--radius-2xl);
-  border: 1px solid var(--gray-100);
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.stat-card-modern::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--primary-gradient);
-}
-
-.stat-card-modern:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-}
-
-.stat-icon-modern {
-  width: 3rem;
-  height: 3rem;
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto var(--space-4);
-  box-shadow: var(--shadow-sm);
-}
-
-.stat-number-modern {
-  font-size: 2.25rem;
-  font-weight: 800;
-  line-height: 1;
-  margin-bottom: var(--space-2);
-  text-align: center;
-}
-
-.stat-label-modern {
-  font-size: 0.875rem;
-  color: var(--gray-500);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
-  text-align: center;
-}
-
-/* Grid System Moderno */
-.grid-modern {
-  display: grid;
-  gap: var(--space-6);
-}
-
-.grid-auto-modern {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.grid-2-modern {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.grid-3-modern {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.grid-4-modern {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-@media (max-width: 768px) {
-  .grid-2-modern,
-  .grid-3-modern,
-  .grid-4-modern {
-    grid-template-columns: 1fr;
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
-  
-  .header-content-modern {
-    padding: 0 var(--space-4);
+  .dark {
+    --background: 0 0% 3.9%;
+
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 3.9%;
+
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 3.9%;
+
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 0 0% 14.9%;
+
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 14.9%;
+
+    --muted-foreground: 0 0% 63.9%;
+
+    --accent: 0 0% 14.9%;
+
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14.9%;
+
+    --input: 0 0% 14.9%;
+
+    --ring: 0 0% 83.1%;
+
+    --chart-1: 220 70% 50%;
+
+    --chart-2: 160 60% 45%;
+
+    --chart-3: 30 80% 55%;
+
+    --chart-4: 280 65% 60%;
+
+    --chart-5: 340 75% 55%;
+
+    --sidebar-background: 240 5.9% 10%;
+
+    --sidebar-foreground: 240 4.8% 95.9%;
+
+    --sidebar-primary: 224.3 76.3% 48%;
+
+    --sidebar-primary-foreground: 0 0% 100%;
+
+    --sidebar-accent: 240 3.7% 15.9%;
+
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+
+    --sidebar-border: 240 3.7% 15.9%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
 
-/* Badges Modernos */
-.badge-modern {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-lg);
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.badge-green-modern {
-  background: var(--green-100);
-  color: var(--green-700);
-}
-
-.badge-blue-modern {
-  background: var(--blue-100);
-  color: var(--blue-700);
-}
-
-.badge-yellow-modern {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badge-red-modern {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.badge-gray-modern {
-  background: var(--gray-100);
-  color: var(--gray-700);
-}
-
-/* Animações Suaves */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+@layer base {
+  * {
+    @apply border-border;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  body {
+    @apply bg-background text-foreground;
   }
-}
-
-@keyframes fade-in-scale {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes slide-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.animate-fade-in-scale {
-  animation: fade-in-scale 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.animate-slide-in-right {
-  animation: slide-in-right 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Utilitários Modernos */
-.container-modern {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 0 var(--space-6);
-}
-
-@media (max-width: 768px) {
-  .container-modern {
-    padding: 0 var(--space-4);
-  }
-}
-
-.page-content-modern {
-  padding: var(--space-8) 0;
-  min-height: calc(100vh - 72px);
-}
-
-.section-modern {
-  margin-bottom: var(--space-12);
-}
-
-.section-header-modern {
-  margin-bottom: var(--space-8);
-}
-
-/* Estados de Loading */
-.loading-spinner-modern {
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Scrollbar Moderna */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--gray-100);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--gray-300);
-  border-radius: 3px;
-  transition: background 0.2s;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--gray-400);
-}
-
-/* Focus States */
-.focus-modern:focus {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-/* Micro-interações */
-.hover-lift {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-lift:hover {
-  transform: translateY(-2px);
-}
-
-.hover-scale {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-scale:hover {
-  transform: scale(1.02);
-}
-
-.hover-glow {
-  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.hover-glow:hover {
-  box-shadow: 0 0 20px rgba(37, 99, 235, 0.2);
 }

@@ -5,15 +5,15 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { GoogleAddressSearch } from '@/components/map/GoogleAddressSearch'
-import { GoogleMap } from '@/components/map/GoogleMap'
+import { Badge } from '@/components/ui/badge'
+import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Home, Package, MapPin, CheckCircle } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -24,6 +24,8 @@ const orderSchema = z.object({
   address_neighborhood: z.string().min(2, 'Bairro é obrigatório'),
   address_city: z.string().min(2, 'Cidade é obrigatória'),
   customer_name: z.string().min(2, 'Nome do cliente é obrigatório'),
+  customer_id: z.string().optional(),
+  order_number: z.string().optional(), // NOVO CAMPO OPCIONAL
 })
 
 type OrderFormData = z.infer<typeof orderSchema>
@@ -35,17 +37,48 @@ interface EstablishmentType {
   icon_url: string
 }
 
+interface Customer {
+  id: string
+  full_name: string
+  phone: string
+  address_street: string
+  address_number: string
+  address_neighborhood: string
+  address_city: string
+}
+
+interface Product {
+  id: string
+  name: string
+  price: number
+}
+
+interface OrderItem {
+  id: string
+  product_id?: string
+  product_name: string
+  quantity: number
+  unit_price: number
+  total_price: number
+}
+
 export function ManualOrderForm() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+  
+  // Estados para dados
   const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
-  const [addressCoordinates, setAddressCoordinates] = useState<{
-    latitude: number
-    longitude: number
-  } | null>(null)
-  const [selectedEstablishmentType, setSelectedEstablishmentType] = useState<EstablishmentType | null>(null)
-  const [addressFound, setAddressFound] = useState(false)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([])
+  
+  // Estados para novos itens
+  const [newProductName, setNewProductName] = useState('')
+  const [newProductPrice, setNewProductPrice] = useState(0)
+  const [newItemQuantity, setNewItemQuantity] = useState(1)
+  const [selectedProductId, setSelectedProductId] = useState('')
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -56,52 +89,137 @@ export function ManualOrderForm() {
       address_neighborhood: '',
       address_city: '',
       customer_name: '',
+      customer_id: '',
+      order_number: '', // NOVO CAMPO
     },
   })
 
   useEffect(() => {
-    loadEstablishmentTypes()
-  }, [])
+    loadInitialData()
+  }, [user])
 
-  const loadEstablishmentTypes = async () => {
+  const loadInitialData = async () => {
+    if (!user) return
+
     try {
-      const { data } = await supabase
+      console.log('🔄 [MANUAL ORDER] Carregando dados iniciais...')
+
+      // Carregar tipos de estabelecimento
+      const { data: types } = await supabase
         .from('establishment_types')
         .select('*')
         .order('name')
 
-      setEstablishmentTypes(data || [])
+      setEstablishmentTypes(types || [])
+      console.log('🏪 [MANUAL ORDER] Tipos de estabelecimento:', types?.length || 0)
+
+      // Carregar clientes
+      const { data: userOrgs } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+
+      if (orgIds.length > 0) {
+        const { data: customersData } = await supabase
+          .from('customers')
+          .select('*')
+          .in('organization_id', orgIds)
+          .order('full_name')
+
+        setCustomers(customersData || [])
+        console.log('👥 [MANUAL ORDER] Clientes carregados:', customersData?.length || 0)
+      }
+
+      console.log('✅ [MANUAL ORDER] Dados iniciais carregados')
     } catch (error) {
-      console.error('Erro ao carregar tipos:', error)
+      console.error('❌ [MANUAL ORDER] Erro ao carregar dados:', error)
+      toast.error('Erro ao carregar dados')
     }
   }
 
-  const handleAddressFound = (addressData: {
-    fullAddress: string
-    street: string
-    number: string
-    neighborhood: string
-    city: string
-    latitude: number
-    longitude: number
-  }) => {
-    form.setValue('address_street', addressData.street)
-    form.setValue('address_number', addressData.number)
-    form.setValue('address_neighborhood', addressData.neighborhood)
-    form.setValue('address_city', addressData.city)
-    
-    setAddressCoordinates({
-      latitude: addressData.latitude,
-      longitude: addressData.longitude
-    })
-    
-    setAddressFound(true)
+  const loadProducts = async (establishmentTypeId: string) => {
+    if (!user || !establishmentTypeId) return
+
+    try {
+      const { data: userOrgs } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', user.id)
+
+      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
+
+      if (orgIds.length > 0) {
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('*')
+          .in('organization_id', orgIds)
+          .eq('establishment_type_id', establishmentTypeId)
+          .eq('is_active', true)
+          .order('name')
+
+        setProducts(productsData || [])
+      }
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error)
+    }
   }
 
-  const handleEstablishmentTypeChange = (value: string) => {
-    form.setValue('establishment_type_id', value)
-    const selectedType = establishmentTypes.find(type => type.id === value)
-    setSelectedEstablishmentType(selectedType || null)
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId)
+    if (customer) {
+      form.setValue('customer_id', customer.id)
+      form.setValue('customer_name', customer.full_name)
+      form.setValue('address_street', customer.address_street || '')
+      form.setValue('address_number', customer.address_number || '')
+      form.setValue('address_neighborhood', customer.address_neighborhood || '')
+      form.setValue('address_city', customer.address_city || '')
+    }
+  }
+
+  const handleDriverSelection = (driverId: string | null) => {
+    setSelectedDriverId(driverId)
+    console.log('🚚 [MANUAL ORDER] Entregador selecionado:', driverId)
+  }
+
+  const addOrderItem = () => {
+    if (selectedProductId) {
+      const product = products.find(p => p.id === selectedProductId)
+      if (product) {
+        const newItem: OrderItem = {
+          id: Date.now().toString(),
+          product_id: product.id,
+          product_name: product.name,
+          quantity: newItemQuantity,
+          unit_price: product.price,
+          total_price: product.price * newItemQuantity
+        }
+        setOrderItems([...orderItems, newItem])
+        setSelectedProductId('')
+        setNewItemQuantity(1)
+      }
+    } else if (newProductName && newProductPrice > 0) {
+      const newItem: OrderItem = {
+        id: Date.now().toString(),
+        product_name: newProductName,
+        quantity: newItemQuantity,
+        unit_price: newProductPrice,
+        total_price: newProductPrice * newItemQuantity
+      }
+      setOrderItems([...orderItems, newItem])
+      setNewProductName('')
+      setNewProductPrice(0)
+      setNewItemQuantity(1)
+    }
+  }
+
+  const removeOrderItem = (itemId: string) => {
+    setOrderItems(orderItems.filter(item => item.id !== itemId))
+  }
+
+  const getTotalValue = () => {
+    return orderItems.reduce((sum, item) => sum + item.total_price, 0)
   }
 
   const onSubmit = async (data: OrderFormData) => {
@@ -110,16 +228,28 @@ export function ManualOrderForm() {
       return
     }
 
-    if (!addressCoordinates) {
-      toast.error('Busque o endereço no mapa antes de criar o pedido')
+    // REMOVIDO: Validação obrigatória de itens
+    // if (orderItems.length === 0) {
+    //   toast.error('Adicione pelo menos um item ao pedido')
+    //   return
+    // }
+
+    if (!selectedDriverId) {
+      toast.error('Selecione um entregador responsável')
       return
     }
 
     setLoading(true)
     
     try {
-      const fullAddress = `${data.address_street}, ${data.address_number}, ${data.address_neighborhood}, ${data.address_city}`
+      console.log('📦 [MANUAL ORDER] Criando pedido manual...')
 
+      // Geocodificar endereço (simulado)
+      const fullAddress = `${data.address_street}, ${data.address_number}, ${data.address_neighborhood}, ${data.address_city}`
+      const delivery_latitude = -18.5122 + (Math.random() - 0.5) * 0.1
+      const delivery_longitude = -44.5550 + (Math.random() - 0.5) * 0.1
+
+      // Buscar organização do usuário
       const { data: userOrgs } = await supabase
         .from('user_organizations')
         .select('organization_id')
@@ -132,59 +262,82 @@ export function ManualOrderForm() {
 
       const organizationId = userOrgs[0].organization_id
 
+      // Criar pedido
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           organization_id: organizationId,
+          customer_id: data.customer_id || null,
           customer_name: data.customer_name,
-          customer_phone: '',
+          customer_phone: '', // Pode ser preenchido depois
           delivery_address: fullAddress,
-          delivery_latitude: addressCoordinates.latitude,
-          delivery_longitude: addressCoordinates.longitude,
+          delivery_latitude,
+          delivery_longitude,
           address_street: data.address_street,
           address_number: data.address_number,
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
-          value: 0,
-          status: 'pending',
-          is_manual: true
+          delivery_driver_id: selectedDriverId,
+          value: getTotalValue(), // Pode ser 0 se não houver itens
+          status: 'assigned', // Já atribuído ao entregador
+          is_manual: true,
+          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null // SALVAR NÚMERO DO PEDIDO
         })
         .select()
         .single()
 
       if (orderError) throw orderError
 
+      // Criar itens do pedido (apenas se houver itens)
+      if (orderItems.length > 0) {
+        const orderItemsData = orderItems.map(item => ({
+          order_id: order.id,
+          product_id: item.product_id || null,
+          product_name: item.product_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: item.total_price
+        }))
+
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItemsData)
+
+        if (itemsError) throw itemsError
+      }
+
+      // Criar eventos
       await supabase
         .from('order_events')
-        .insert({
-          order_id: order.id,
-          event_type: 'created',
-          description: `Pedido manual criado para ${data.customer_name}`
-        })
+        .insert([
+          {
+            order_id: order.id,
+            event_type: 'created',
+            description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}`
+          },
+          {
+            order_id: order.id,
+            event_type: 'assigned',
+            description: 'Pedido atribuído ao entregador'
+          }
+        ])
 
-      toast.success('Pedido criado com sucesso!')
+      console.log('✅ [MANUAL ORDER] Pedido criado com sucesso:', order.id)
+
+      toast.success('Pedido manual criado e atribuído com sucesso!')
       router.push('/')
     } catch (error) {
-      console.error('Erro ao criar pedido:', error)
+      console.error('❌ [MANUAL ORDER] Erro ao criar pedido:', error)
       toast.error('Erro ao criar pedido')
     } finally {
       setLoading(false)
     }
   }
 
-  const mapOrders = addressCoordinates && selectedEstablishmentType ? [{
-    id: 'preview',
-    latitude: addressCoordinates.latitude,
-    longitude: addressCoordinates.longitude,
-    customerName: form.watch('customer_name') || 'Novo Pedido',
-    status: 'preview',
-    categoryIcon: selectedEstablishmentType.icon_url,
-    categoryEmoji: selectedEstablishmentType.emoji
-  }] : []
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
@@ -216,12 +369,18 @@ export function ManualOrderForm() {
           {/* Categoria */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
-              <CardTitle>Categoria</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Search className="w-5 h-5" />
+                Categoria
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <Select 
                 value={form.watch('establishment_type_id')} 
-                onValueChange={handleEstablishmentTypeChange}
+                onValueChange={(value) => {
+                  form.setValue('establishment_type_id', value)
+                  loadProducts(value)
+                }}
               >
                 <SelectTrigger className="rounded-xl">
                   <SelectValue placeholder="Selecione a categoria" />
@@ -251,18 +410,9 @@ export function ManualOrderForm() {
               <CardTitle className="flex items-center gap-2">
                 <Home className="w-5 h-5" />
                 Endereço
-                {addressFound && (
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              
-              <GoogleAddressSearch 
-                onAddressFound={handleAddressFound}
-                disabled={loading}
-              />
-              
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <Label htmlFor="address_street">Rua</Label>
@@ -272,6 +422,11 @@ export function ManualOrderForm() {
                     placeholder="Nome da rua"
                     className="rounded-xl"
                   />
+                  {form.formState.errors.address_street && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {form.formState.errors.address_street.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="address_number">Número</Label>
@@ -281,9 +436,13 @@ export function ManualOrderForm() {
                     placeholder="123"
                     className="rounded-xl"
                   />
+                  {form.formState.errors.address_number && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {form.formState.errors.address_number.message}
+                    </p>
+                  )}
                 </div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="address_neighborhood">Bairro</Label>
@@ -293,6 +452,11 @@ export function ManualOrderForm() {
                     placeholder="Nome do bairro"
                     className="rounded-xl"
                   />
+                  {form.formState.errors.address_neighborhood && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {form.formState.errors.address_neighborhood.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="address_city">Cidade</Label>
@@ -302,36 +466,91 @@ export function ManualOrderForm() {
                     placeholder="Nome da cidade"
                     className="rounded-xl"
                   />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  Localização no Mapa
-                </Label>
-                <div className="h-96 rounded-2xl overflow-hidden border border-gray-200">
-                  <GoogleMap
-                    orders={mapOrders}
-                    centerLat={addressCoordinates?.latitude}
-                    centerLng={addressCoordinates?.longitude}
-                    zoom={addressCoordinates ? 17 : 12}
-                    className="w-full h-full"
-                    height="100%"
-                  />
+                  {form.formState.errors.address_city && (
+                    <p className="text-sm text-red-500 mt-1">
+                      {form.formState.errors.address_city.message}
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Cliente */}
+          {/* COMPONENTE DE ENTREGADORES RESPONSÁVEL */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
-              <CardTitle>Cliente</CardTitle>
+              <CardTitle>Entregador Responsável</CardTitle>
+              <CardDescription>
+                Selecione um entregador ativo ou ative o modo automático
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div>
-                <Label htmlFor="customer_name">Nome do Cliente</Label>
+              <ActiveDriverSelector
+                onDriverSelect={handleDriverSelection}
+                selectedDriverId={selectedDriverId || undefined}
+                disabled={loading}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Dados do Pedido */}
+          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
+            <CardHeader>
+              <CardTitle>Pedido</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              {/* NOVO CAMPO: Número do Pedido */}
+              <div className="space-y-2">
+                <Label htmlFor="order_number" className="flex items-center gap-2">
+                  <Hash className="w-4 h-4" />
+                  Número do Pedido (Opcional)
+                </Label>
+                <Input
+                  id="order_number"
+                  {...form.register('order_number')}
+                  placeholder="Digite o número do pedido (ex: 12345)"
+                  className="rounded-xl"
+                />
+                <p className="text-xs text-gray-500">
+                  Campo opcional para identificar o pedido com um número específico
+                </p>
+              </div>
+
+              {/* Nome do Cliente */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="customer_name">Nome do Cliente</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push('/clientes/novo')}
+                    className="rounded-xl"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Cadastrar Cliente
+                  </Button>
+                </div>
+                
+                {customers.length > 0 && (
+                  <Select onValueChange={handleCustomerSelect}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Ou selecione um cliente existente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          <div>
+                            <div className="font-medium">{customer.full_name}</div>
+                            <div className="text-sm text-gray-500">{customer.phone}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
                 <Input
                   id="customer_name"
                   {...form.register('customer_name')}
@@ -339,15 +558,126 @@ export function ManualOrderForm() {
                   className="rounded-xl"
                 />
                 {form.formState.errors.customer_name && (
-                  <p className="text-sm text-red-500 mt-1">
+                  <p className="text-sm text-red-500">
                     {form.formState.errors.customer_name.message}
                   </p>
+                )}
+              </div>
+
+              {/* Lista de Itens (OPCIONAL) */}
+              <div className="space-y-4">
+                <Label>Itens (Opcional)</Label>
+                
+                {/* Adicionar Item */}
+                <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                  <h4 className="font-medium">Adicionar Item</h4>
+                  
+                  {products.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Produto Existente</Label>
+                      <div className="flex gap-2">
+                        <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                          <SelectTrigger className="rounded-xl flex-1">
+                            <SelectValue placeholder="Selecione um produto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((product) => (
+                              <SelectItem key={product.id} value={product.id}>
+                                <div className="flex justify-between w-full">
+                                  <span>{product.name}</span>
+                                  <span className="text-green-600">R$ {product.price.toFixed(2)}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={newItemQuantity}
+                          onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 1)}
+                          className="rounded-xl w-20"
+                          placeholder="Qtd"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-center text-gray-500">ou</div>
+
+                  <div className="space-y-2">
+                    <Label>Novo Produto</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newProductName}
+                        onChange={(e) => setNewProductName(e.target.value)}
+                        placeholder="Nome do produto"
+                        className="rounded-xl flex-1"
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newProductPrice}
+                        onChange={(e) => setNewProductPrice(parseFloat(e.target.value) || 0)}
+                        placeholder="Preço"
+                        className="rounded-xl w-24"
+                      />
+                      <Input
+                        type="number"
+                        min="1"
+                        value={newItemQuantity}
+                        onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 1)}
+                        className="rounded-xl w-20"
+                        placeholder="Qtd"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={addOrderItem}
+                    disabled={!selectedProductId && (!newProductName || newProductPrice <= 0)}
+                    className="w-full rounded-xl"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar Item
+                  </Button>
+                </div>
+
+                {/* Lista de Itens Adicionados */}
+                {orderItems.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Itens do Pedido</Label>
+                    {orderItems.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                        <div className="flex-1">
+                          <div className="font-medium">{item.product_name}</div>
+                          <div className="text-sm text-gray-600">
+                            {item.quantity}x R$ {item.unit_price.toFixed(2)} = R$ {item.total_price.toFixed(2)}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeOrderItem(item.id)}
+                          className="rounded-xl"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <div className="text-right font-bold text-lg">
+                      Total: R$ {getTotalValue().toFixed(2)}
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          {/* Botões */}
+          {/* Botão Criar Pedido */}
           <div className="flex gap-4">
             <Button
               type="button"
@@ -359,7 +689,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !addressCoordinates}
+              disabled={loading || !selectedDriverId} // REMOVIDO: orderItems.length === 0
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
