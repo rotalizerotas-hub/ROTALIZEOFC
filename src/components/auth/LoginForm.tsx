@@ -1,30 +1,72 @@
 'use client'
 
-import { Auth } from '@supabase/auth-ui-react'
-import { ThemeSupa } from '@supabase/auth-ui-shared'
+import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Package2, Sparkles } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Package2, Sparkles, Mail, Lock } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [isSignUp, setIsSignUp] = useState(false)
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        })
+        if (error) throw error
+        toast.success('Verifique seu email para confirmar a conta!')
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (error) throw error
+        toast.success('Login realizado com sucesso!')
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Erro na autenticação')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{
-      background: 'linear-gradient(135deg, rgba(30, 64, 175, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)'
-    }}>
+    <div 
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        background: 'linear-gradient(135deg, rgba(30, 64, 175, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)'
+      }}
+    >
       <div className="w-full max-w-md space-y-8">
         {/* Logo e Branding */}
         <div className="text-center">
-          <div className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-6 shadow-xl" style={{
-            background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
-          }}>
+          <div 
+            className="mx-auto w-20 h-20 rounded-2xl flex items-center justify-center mb-6 shadow-xl"
+            style={{
+              background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
+            }}
+          >
             <Package2 className="w-10 h-10 text-white" />
           </div>
           
-          <h1 className="text-4xl font-bold mb-2" style={{
-            background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent'
-          }}>
+          <h1 
+            className="text-4xl font-bold mb-2"
+            style={{
+              background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent'
+            }}
+          >
             RotaLize
           </h1>
           
@@ -41,101 +83,66 @@ export function LoginForm() {
         {/* Card de Login */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
           <div className="mb-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Bem-vindo de volta</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">
+              {isSignUp ? 'Criar Conta' : 'Bem-vindo de volta'}
+            </h2>
             <p className="text-gray-600">
-              Acesse sua conta para gerenciar suas entregas
+              {isSignUp ? 'Crie sua conta para começar' : 'Acesse sua conta para gerenciar suas entregas'}
             </p>
           </div>
 
-          <Auth
-            supabaseClient={supabase}
-            providers={[]}
-            appearance={{
-              theme: ThemeSupa,
-              style: {
-                button: {
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #1e40af, #059669)',
-                  border: 'none',
-                  padding: '14px 24px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  boxShadow: '0 4px 14px 0 rgba(30, 64, 175, 0.3)',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                },
-                input: {
-                  borderRadius: '12px',
-                  border: '1px solid #e5e7eb',
-                  padding: '14px 16px',
-                  fontSize: '14px',
-                  backgroundColor: '#ffffff',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                },
-                label: {
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#374151',
-                  marginBottom: '6px',
-                },
-                container: {
-                  gap: '20px',
-                },
-                divider: {
-                  background: '#e5e7eb',
-                  margin: '24px 0',
-                },
-                message: {
-                  borderRadius: '8px',
-                  padding: '12px 16px',
-                  fontSize: '14px',
-                  marginBottom: '16px',
-                },
-              },
-              variables: {
-                default: {
-                  colors: {
-                    brand: '#1e40af',
-                    brandAccent: '#059669',
-                    brandButtonText: 'white',
-                    defaultButtonBackground: '#f3f4f6',
-                    defaultButtonBackgroundHover: '#e5e7eb',
-                    inputBackground: 'white',
-                    inputBorder: '#e5e7eb',
-                    inputBorderHover: '#d1d5db',
-                    inputBorderFocus: '#1e40af',
-                  },
-                },
-              },
-            }}
-            theme="light"
-            localization={{
-              variables: {
-                sign_in: {
-                  email_label: 'Email',
-                  password_label: 'Senha',
-                  button_label: 'Entrar',
-                  loading_button_label: 'Entrando...',
-                  link_text: 'Já tem uma conta? Entre aqui',
-                },
-                sign_up: {
-                  email_label: 'Email',
-                  password_label: 'Senha',
-                  button_label: 'Criar conta',
-                  loading_button_label: 'Criando conta...',
-                  link_text: 'Não tem uma conta? Crie aqui',
-                  confirmation_text: 'Verifique seu email para confirmar sua conta',
-                },
-                forgotten_password: {
-                  email_label: 'Email',
-                  button_label: 'Enviar instruções',
-                  loading_button_label: 'Enviando...',
-                  link_text: 'Esqueceu sua senha?',
-                  confirmation_text: 'Verifique seu email para redefinir a senha',
-                },
-              },
-            }}
-          />
+          <form onSubmit={handleAuth} className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Senha
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full py-3"
+              disabled={loading}
+            >
+              {loading ? 'Carregando...' : (isSignUp ? 'Criar Conta' : 'Entrar')}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              {isSignUp ? 'Já tem uma conta? Entre aqui' : 'Não tem uma conta? Crie aqui'}
+            </button>
+          </div>
         </div>
 
         {/* Footer */}

@@ -12,35 +12,23 @@ import {
   Plus, 
   Bell,
   Search,
-  Filter,
-  MoreVertical,
   Activity,
   Clock,
   CheckCircle,
-  AlertCircle,
   User,
-  LogOut,
-  Menu
+  LogOut
 } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface DashboardStats {
-  totalOrders: number
-  activeDrivers: number
-  pendingOrders: number
-  todayRevenue: number
-}
-
 export function Dashboard() {
   const { user, signOut } = useAuth()
-  const [stats, setStats] = useState<DashboardStats>({
+  const [stats, setStats] = useState({
     totalOrders: 0,
     activeDrivers: 0,
     pendingOrders: 0,
     todayRevenue: 0
   })
   const [loading, setLoading] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     loadDashboardData()
@@ -48,37 +36,15 @@ export function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // Buscar estatísticas do dashboard
-      const today = new Date().toISOString().split('T')[0]
-
-      // Total de pedidos
-      const { count: totalOrders } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-
-      // Entregadores ativos
-      const { count: activeDrivers } = await supabase
-        .from('delivery_drivers')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_online', true)
-
-      // Pedidos pendentes
-      const { count: pendingOrders } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-
-      // Receita de hoje (simulada)
-      const todayRevenue = Math.random() * 1000 + 500
-
+      // Simular dados por enquanto
       setStats({
-        totalOrders: totalOrders || 0,
-        activeDrivers: activeDrivers || 0,
-        pendingOrders: pendingOrders || 0,
-        todayRevenue
+        totalOrders: 156,
+        activeDrivers: 8,
+        pendingOrders: 12,
+        todayRevenue: 2847.50
       })
     } catch (error) {
-      console.error('Erro ao carregar dados do dashboard:', error)
+      console.error('Erro ao carregar dados:', error)
       toast.error('Erro ao carregar dados')
     } finally {
       setLoading(false)
@@ -102,51 +68,35 @@ export function Dashboard() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Logo e Navegação */}
-            <div className="flex items-center space-x-8">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{
+            {/* Logo */}
+            <div className="flex items-center space-x-3">
+              <div 
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{
                   background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
-                }}>
-                  <Package className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold" style={{
+                }}
+              >
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 
+                  className="text-xl font-bold"
+                  style={{
                     background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)',
                     WebkitBackgroundClip: 'text',
                     backgroundClip: 'text',
                     color: 'transparent'
-                  }}>
-                    RotaLize
-                  </h1>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Dashboard</p>
-                </div>
+                  }}
+                >
+                  RotaLize
+                </h1>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Dashboard</p>
               </div>
-              
-              {/* Navegação Desktop */}
-              <nav className="hidden md:flex items-center space-x-1">
-                <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
-                  <Activity className="w-4 h-4" />
-                  <span>Visão Geral</span>
-                </button>
-                <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
-                  <Package className="w-4 h-4" />
-                  <span>Pedidos</span>
-                </button>
-                <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
-                  <Users className="w-4 h-4" />
-                  <span>Entregadores</span>
-                </button>
-                <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>Mapa</span>
-                </button>
-              </nav>
             </div>
 
             {/* Ações do Header */}
             <div className="flex items-center space-x-4">
-              {/* Busca Desktop */}
+              {/* Busca */}
               <div className="hidden md:flex items-center space-x-2 bg-gray-100 rounded-lg px-3 py-2">
                 <Search className="w-4 h-4 text-gray-400" />
                 <input 
@@ -168,9 +118,12 @@ export function Dashboard() {
                   <p className="text-sm font-medium text-gray-800">{user?.email?.split('@')[0]}</p>
                   <p className="text-xs text-gray-500">Administrador</p>
                 </div>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{
-                  background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
-                }}>
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{
+                    background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
+                  }}
+                >
                   <User className="w-4 h-4 text-white" />
                 </div>
                 <button 
@@ -181,14 +134,6 @@ export function Dashboard() {
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Menu Mobile */}
-              <button 
-                className="md:hidden p-2 text-gray-400 hover:text-gray-600"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                <Menu className="w-5 h-5" />
-              </button>
             </div>
           </div>
         </div>
@@ -211,7 +156,6 @@ export function Dashboard() {
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Package className="w-6 h-6 text-blue-600" />
               </div>
-              <MoreVertical className="w-4 h-4 text-gray-400" />
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total de Pedidos</p>
@@ -228,7 +172,6 @@ export function Dashboard() {
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <Users className="w-6 h-6 text-green-600" />
               </div>
-              <MoreVertical className="w-4 h-4 text-gray-400" />
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Entregadores Ativos</p>
@@ -245,13 +188,12 @@ export function Dashboard() {
               <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6 text-yellow-600" />
               </div>
-              <MoreVertical className="w-4 h-4 text-gray-400" />
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pedidos Pendentes</p>
               <p className="text-2xl font-bold text-gray-900 mb-2">{stats.pendingOrders}</p>
               <div className="flex items-center space-x-1">
-                <AlertCircle className="w-3 h-3 text-yellow-500" />
+                <Clock className="w-3 h-3 text-yellow-500" />
                 <span className="text-sm text-yellow-600">Aguardando</span>
               </div>
             </div>
@@ -262,7 +204,6 @@ export function Dashboard() {
               <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-purple-600" />
               </div>
-              <MoreVertical className="w-4 h-4 text-gray-400" />
             </div>
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Receita Hoje</p>
@@ -277,20 +218,17 @@ export function Dashboard() {
 
         {/* Ações Rápidas */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-gray-900">Ações Rápidas</h3>
-            <button className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-              <Filter className="w-4 h-4" />
-              <span>Filtros</span>
-            </button>
-          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-6">Ações Rápidas</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-all group cursor-pointer">
               <div className="flex items-center space-x-4 mb-4">
-                <div className="w-14 h-14 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform" style={{
-                  background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
-                }}>
+                <div 
+                  className="w-14 h-14 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
+                  style={{
+                    background: 'linear-gradient(135deg, #1e40af 0%, #059669 100%)'
+                  }}
+                >
                   <Plus className="w-7 h-7 text-white" />
                 </div>
                 <div>

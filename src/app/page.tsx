@@ -1,42 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { Dashboard } from '@/components/dashboard/Dashboard'
-import { AuthProvider } from '@/components/auth/AuthProvider'
-import { Toaster } from 'sonner'
 
 export default function Home() {
-  return (
-    <AuthProvider>
-      <main className="min-h-screen">
-        <AppContent />
-        <Toaster position="top-right" />
-      </main>
-    </AuthProvider>
-  )
-}
-
-function AppContent() {
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Verificar sessão atual
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    // Escutar mudanças de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
@@ -49,5 +18,9 @@ function AppContent() {
     )
   }
 
-  return user ? <Dashboard /> : <LoginForm />
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {user ? <Dashboard /> : <LoginForm />}
+    </div>
+  )
 }
