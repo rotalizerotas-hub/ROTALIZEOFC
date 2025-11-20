@@ -6,7 +6,13 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
-  }
+  },
+  images: {
+    unoptimized: true,
+  },
+  experimental: {
+    serverComponentsExternalPackages: ["@supabase/supabase-js"],
+  },
 }
 
 module.exports = nextConfig

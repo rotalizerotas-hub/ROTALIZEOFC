@@ -1,1 +1,6 @@
-// Arquivo removido - não usando Tailwind CSS
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
