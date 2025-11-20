@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MapboxMap } from '@/components/map/MapboxMap'
+import { GoogleMap } from '@/components/map/GoogleMap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -318,7 +318,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="h-96">
-              <MapboxMap 
+              <GoogleMap 
                 organizations={data.organizations}
                 orders={data.orders}
               />
