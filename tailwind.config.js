@@ -8,7 +8,7 @@ module.exports = {
       colors: {
         border: "#e5e7eb",
         input: "#e5e7eb", 
-        ring: "#1f2937",
+        ring: "#1e40af",
         background: "#ffffff",
         foreground: "#1f2937",
         primary: {
@@ -44,6 +44,9 @@ module.exports = {
         lg: "0.75rem",
         md: "0.5rem",
         sm: "0.375rem",
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
     },
   },
