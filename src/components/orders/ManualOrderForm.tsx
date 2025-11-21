@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
@@ -352,6 +353,13 @@ export function ManualOrderForm() {
     }
   }
 
+  // Preparar opções para o SearchableSelect
+  const categoryOptions = establishmentTypes.map(type => ({
+    value: type.id,
+    label: type.name,
+    emoji: type.emoji
+  }))
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
       {/* Header */}
@@ -383,36 +391,29 @@ export function ManualOrderForm() {
       <div className="container mx-auto px-4 py-8">
         <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-4xl mx-auto space-y-8">
           
-          {/* Categoria */}
+          {/* Categoria com Busca */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Search className="w-5 h-5" />
                 Categoria
               </CardTitle>
+              <CardDescription>
+                Busque e selecione a categoria do estabelecimento
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <Select 
-                value={form.watch('establishment_type_id')} 
+              <SearchableSelect
+                options={categoryOptions}
+                value={form.watch('establishment_type_id')}
                 onValueChange={(value) => {
                   form.setValue('establishment_type_id', value)
                   loadProducts(value)
                 }}
-              >
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {establishmentTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{type.emoji}</span>
-                        <span>{type.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Busque por uma categoria..."
+                searchPlaceholder="Digite para buscar categorias..."
+                emptyText="Nenhuma categoria encontrada."
+              />
               {form.formState.errors.establishment_type_id && (
                 <p className="text-sm text-red-500 mt-1">
                   {form.formState.errors.establishment_type_id.message}
@@ -555,7 +556,6 @@ export function ManualOrderForm() {
                 </Label>
                 <Input
                   id="order_number"
-                  
                   {...form.register('order_number')}
                   placeholder="Digite o número do pedido (ex: 12345)"
                   className="rounded-xl"
