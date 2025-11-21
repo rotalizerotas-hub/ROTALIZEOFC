@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Wrapper, Status } from '@googlemaps/react-wrapper'
 
 // API Key do Google Maps
@@ -70,9 +70,9 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
   const markersRef = useRef<google.maps.Marker[]>([])
 
   useEffect(() => {
-    if (mapRef.current && !map.current) {
+    if (mapRef.current && !map.current && window.google) {
       // Inicializar mapa
-      map.current = new google.maps.Map(mapRef.current, {
+      map.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: -18.5122, lng: -44.5550 }, // Centro de Minas Gerais
         zoom: 10,
         styles: [
@@ -87,7 +87,7 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
   }, [])
 
   useEffect(() => {
-    if (!map.current) return
+    if (!map.current || !window.google) return
 
     // Limpar marcadores existentes
     markersRef.current.forEach(marker => marker.setMap(null))
@@ -95,12 +95,12 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
 
     // Adicionar marcadores para organizações
     organizations.forEach(org => {
-      const marker = new google.maps.Marker({
+      const marker = new window.google.maps.Marker({
         position: { lat: org.latitude, lng: org.longitude },
         map: map.current,
         title: org.name,
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
+          path: window.google.maps.SymbolPath.CIRCLE,
           scale: 12,
           fillColor: getEstablishmentColor(org.establishment_type.name),
           fillOpacity: 0.9,
@@ -110,7 +110,7 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
       })
 
       // InfoWindow para organizações
-      const infoWindow = new google.maps.InfoWindow({
+      const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <div style="padding: 12px; font-family: system-ui;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -131,12 +131,12 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
 
     // Adicionar marcadores para pedidos
     orders.forEach(order => {
-      const marker = new google.maps.Marker({
+      const marker = new window.google.maps.Marker({
         position: { lat: order.delivery_latitude, lng: order.delivery_longitude },
         map: map.current,
         title: order.customer_name,
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
+          path: window.google.maps.SymbolPath.CIRCLE,
           scale: 8,
           fillColor: getOrderColor(order.status),
           fillOpacity: 0.8,
@@ -147,7 +147,7 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
 
       // InfoWindow para pedidos
       const statusText = getStatusText(order.status || 'unknown')
-      const infoWindow = new google.maps.InfoWindow({
+      const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <div style="padding: 12px; font-family: system-ui;">
             <h3 style="margin: 0 0 4px 0; font-weight: 600; color: #1f2937;">${order.customer_name || 'Cliente'}</h3>
@@ -187,7 +187,7 @@ const LoadingComponent = () => (
 )
 
 // Componente de erro
-const ErrorComponent = (status: Status) => (
+const ErrorComponent = ({ status }: { status: Status }) => (
   <div className="w-full h-full rounded-2xl shadow-lg overflow-hidden bg-red-50 flex items-center justify-center" style={{ minHeight: '400px' }}>
     <div className="text-center">
       <div className="inline-flex items-center justify-center w-12 h-12 bg-red-500 rounded-xl shadow-lg mb-4">
