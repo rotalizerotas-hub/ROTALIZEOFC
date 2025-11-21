@@ -203,6 +203,7 @@ export function GoogleMap(props: GoogleMapProps) {
   return (
     <Wrapper 
       apiKey={GOOGLE_MAPS_API_KEY}
+      libraries={['places']}
       render={(status) => {
         switch (status) {
           case Status.LOADING:
