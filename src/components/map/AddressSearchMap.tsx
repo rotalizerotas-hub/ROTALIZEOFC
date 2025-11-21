@@ -71,7 +71,7 @@ function MapComponent({ onAddressSelect, initialAddress, className = '' }: Addre
   }, [])
 
   useEffect(() => {
-    if (searchInputRef.current && window.google && isLoaded && !autocomplete.current) {
+    if (searchInputRef.current && window.google && window.google.maps && window.google.maps.places && isLoaded && !autocomplete.current) {
       // Configurar autocomplete
       autocomplete.current = new window.google.maps.places.Autocomplete(
         searchInputRef.current,
@@ -93,6 +93,8 @@ function MapComponent({ onAddressSelect, initialAddress, className = '' }: Addre
   }, [isLoaded])
 
   const geocodePosition = (position: google.maps.LatLng) => {
+    if (!window.google || !window.google.maps) return
+    
     const geocoder = new window.google.maps.Geocoder()
     geocoder.geocode({ location: position }, (results, status) => {
       if (status === 'OK' && results && results[0]) {

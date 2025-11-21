@@ -14,7 +14,7 @@ import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearchMap } from '@/components/map/AddressSearchMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -555,6 +555,7 @@ export function ManualOrderForm() {
                 </Label>
                 <Input
                   id="order_number"
+                  
                   {...form.register('order_number')}
                   placeholder="Digite o número do pedido (ex: 12345)"
                   className="rounded-xl"
@@ -568,16 +569,6 @@ export function ManualOrderForm() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="customer_name">Nome do Cliente</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/clientes/novo')}
-                    className="rounded-xl"
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Cadastrar Cliente
-                  </Button>
                 </div>
                 
                 {customers.length > 0 && (
