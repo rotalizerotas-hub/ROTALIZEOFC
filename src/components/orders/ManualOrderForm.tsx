@@ -14,12 +14,11 @@ import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearchMap } from '@/components/map/AddressSearchMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
+import { ArrowLeft, FileText, Package, Plus, Minus, Hash, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
 const orderSchema = z.object({
-  establishment_type_id: z.string().min(1, 'Selecione uma categoria'),
   address_street: z.string().min(2, 'Rua é obrigatória'),
   address_number: z.string().min(1, 'Número é obrigatório'),
   address_neighborhood: z.string().min(2, 'Bairro é obrigatório'),
@@ -73,15 +72,57 @@ interface AddressData {
   longitude: number
 }
 
+// Função para obter tema da categoria
+const getCategoryTheme = (categoryName: string) => {
+  const themes: Record<string, {
+    gradient: string
+    background: string
+    text: string
+    accent: string
+  }> = {
+    'Pizzaria': {
+      gradient: 'from-red-500 to-orange-500',
+      background: 'from-red-50 via-orange-50 to-yellow-50',
+      text: '#7f1d1d',
+      accent: '#dc2626'
+    },
+    'Hamburgueria': {
+      gradient: 'from-amber-500 to-yellow-500',
+      background: 'from-amber-50 via-yellow-50 to-orange-50',
+      text: '#92400e',
+      accent: '#d97706'
+    },
+    'Farmácia': {
+      gradient: 'from-blue-500 to-indigo-500',
+      background: 'from-blue-50 via-indigo-50 to-cyan-50',
+      text: '#1e3a8a',
+      accent: '#2563eb'
+    },
+    'Supermercado': {
+      gradient: 'from-green-500 to-emerald-500',
+      background: 'from-green-50 via-emerald-50 to-teal-50',
+      text: '#064e3b',
+      accent: '#059669'
+    }
+  }
+
+  return themes[categoryName] || {
+    gradient: 'from-blue-500 to-green-500',
+    background: 'from-blue-50 via-green-50 to-blue-100',
+    text: '#1f2937',
+    accent: '#3b82f6'
+  }
+}
+
 export function ManualOrderForm() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [addressData, setAddressData] = useState<AddressData | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<EstablishmentType | null>(null)
   
   // Estados para dados
-  const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
@@ -95,7 +136,6 @@ export function ManualOrderForm() {
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
-      establishment_type_id: '',
       address_street: '',
       address_number: '',
       address_neighborhood: '',
@@ -107,23 +147,27 @@ export function ManualOrderForm() {
   })
 
   useEffect(() => {
-    loadInitialData()
-  }, [user])
+    // Carregar categoria selecionada
+    const savedCategory = localStorage.getItem('selectedCategory')
+    if (savedCategory) {
+      try {
+        const category = JSON.parse(savedCategory)
+        setSelectedCategory(category)
+        loadInitialData(category.id)
+      } catch (error) {
+        console.error('Erro ao carregar categoria:', error)
+        router.push('/')
+      }
+    } else {
+      router.push('/')
+    }
+  }, [user, router])
 
-  const loadInitialData = async () => {
+  const loadInitialData = async (establishmentTypeId: string) => {
     if (!user) return
 
     try {
       console.log('🔄 [MANUAL ORDER] Carregando dados iniciais...')
-
-      // Carregar tipos de estabelecimento
-      const { data: types } = await supabase
-        .from('establishment_types')
-        .select('*')
-        .order('name')
-
-      setEstablishmentTypes(types || [])
-      console.log('🏪 [MANUAL ORDER] Tipos de estabelecimento:', types?.length || 0)
 
       // Carregar clientes
       const { data: userOrgs } = await supabase
@@ -141,28 +185,8 @@ export function ManualOrderForm() {
           .order('full_name')
 
         setCustomers(customersData || [])
-        console.log('👥 [MANUAL ORDER] Clientes carregados:', customersData?.length || 0)
-      }
 
-      console.log('✅ [MANUAL ORDER] Dados iniciais carregados')
-    } catch (error) {
-      console.error('❌ [MANUAL ORDER] Erro ao carregar dados:', error)
-      toast.error('Erro ao carregar dados')
-    }
-  }
-
-  const loadProducts = async (establishmentTypeId: string) => {
-    if (!user || !establishmentTypeId) return
-
-    try {
-      const { data: userOrgs } = await supabase
-        .from('user_organizations')
-        .select('organization_id')
-        .eq('user_id', user.id)
-
-      const orgIds = userOrgs?.map(uo => uo.organization_id) || []
-
-      if (orgIds.length > 0) {
+        // Carregar produtos da categoria
         const { data: productsData } = await supabase
           .from('products')
           .select('*')
@@ -173,8 +197,11 @@ export function ManualOrderForm() {
 
         setProducts(productsData || [])
       }
+
+      console.log('✅ [MANUAL ORDER] Dados iniciais carregados')
     } catch (error) {
-      console.error('Erro ao carregar produtos:', error)
+      console.error('❌ [MANUAL ORDER] Erro ao carregar dados:', error)
+      toast.error('Erro ao carregar dados')
     }
   }
 
@@ -246,8 +273,8 @@ export function ManualOrderForm() {
   }
 
   const onSubmit = async (data: OrderFormData) => {
-    if (!user) {
-      toast.error('Usuário não autenticado')
+    if (!user || !selectedCategory) {
+      toast.error('Dados de categoria não encontrados')
       return
     }
 
@@ -294,7 +321,7 @@ export function ManualOrderForm() {
           address_number: data.address_number,
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
-          establishment_type_id: data.establishment_type_id,
+          establishment_type_id: selectedCategory.id,
           delivery_driver_id: selectedDriverId,
           value: getTotalValue(),
           status: 'assigned',
@@ -352,9 +379,24 @@ export function ManualOrderForm() {
     }
   }
 
+  if (!selectedCategory) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl shadow-lg mb-4 animate-pulse">
+            <FileText className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-gray-600">Carregando categoria...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const theme = getCategoryTheme(selectedCategory.name)
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
-      {/* Header */}
+    <div className={`min-h-screen bg-gradient-to-br ${theme.background}`}>
+      {/* Header Temático */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
@@ -366,12 +408,12 @@ export function ManualOrderForm() {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-3">
-              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
-                <FileText className="w-6 h-6 text-white" />
+              <div className={`inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br ${theme.gradient} rounded-xl shadow-lg`}>
+                <span className="text-xl text-white">{selectedCategory.emoji}</span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                  Novo Pedido Manual
+                <h1 className={`text-2xl font-bold bg-gradient-to-r ${theme.gradient} bg-clip-text text-transparent`}>
+                  Novo Pedido - {selectedCategory.name}
                 </h1>
                 <p className="text-sm text-gray-600">Criar pedido detalhado</p>
               </div>
@@ -383,49 +425,11 @@ export function ManualOrderForm() {
       <div className="container mx-auto px-4 py-8">
         <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-4xl mx-auto space-y-8">
           
-          {/* Categoria */}
-          <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="w-5 h-5" />
-                Categoria
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select 
-                value={form.watch('establishment_type_id')} 
-                onValueChange={(value) => {
-                  form.setValue('establishment_type_id', value)
-                  loadProducts(value)
-                }}
-              >
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {establishmentTypes.map((type) => (
-                    <SelectItem key={type.id} value={type.id}>
-                      <div className="flex items-center gap-2">
-                        <span>{type.emoji}</span>
-                        <span>{type.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {form.formState.errors.establishment_type_id && (
-                <p className="text-sm text-red-500 mt-1">
-                  {form.formState.errors.establishment_type_id.message}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Endereço com Mapa */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
+                <MapPin className="w-5 h-5" style={{ color: theme.accent }} />
                 Endereço de Entrega
               </CardTitle>
               <CardDescription>
@@ -550,12 +554,11 @@ export function ManualOrderForm() {
               {/* NOVO CAMPO: Número do Pedido */}
               <div className="space-y-2">
                 <Label htmlFor="order_number" className="flex items-center gap-2">
-                  <Hash className="w-4 h-4" />
+                  <Hash className="w-4 h-4" style={{ color: theme.accent }} />
                   Número do Pedido (Opcional)
                 </Label>
                 <Input
                   id="order_number"
-                  
                   {...form.register('order_number')}
                   placeholder="Digite o número do pedido (ex: 12345)"
                   className="rounded-xl"
@@ -676,7 +679,7 @@ export function ManualOrderForm() {
                     type="button"
                     onClick={addOrderItem}
                     disabled={!selectedProductId && (!newProductName || newProductPrice <= 0)}
-                    className="w-full rounded-xl"
+                    className={`w-full rounded-xl bg-gradient-to-r ${theme.gradient} text-white`}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Adicionar Item
@@ -706,7 +709,7 @@ export function ManualOrderForm() {
                         </Button>
                       </div>
                     ))}
-                    <div className="text-right font-bold text-lg">
+                    <div className="text-right font-bold text-lg" style={{ color: theme.accent }}>
                       Total: R$ {getTotalValue().toFixed(2)}
                     </div>
                   </div>
@@ -728,7 +731,7 @@ export function ManualOrderForm() {
             <Button
               type="submit"
               disabled={loading || !selectedDriverId || !addressData}
-              className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
+              className={`flex-1 bg-gradient-to-r ${theme.gradient} hover:opacity-90 text-white rounded-xl`}
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
             </Button>
