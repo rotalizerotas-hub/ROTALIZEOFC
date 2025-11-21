@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { Plus, Users, Map, Package, TrendingUp, FileText, Clock, MapPin, Camera, Route, CheckCircle } from 'lucide-react'
+import { Plus, Users, Map, Package, TrendingUp, FileText, Clock, MapPin, Camera, Route, CheckCircle, ClipboardList } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Organization {
@@ -145,7 +145,7 @@ export function Dashboard() {
 
         orders = ordersData || []
 
-        // Registros completos de pedidos (últimos 20)
+        // Registros completos de pedidos (últimos 5 para preview)
         const { data: recordsData } = await supabase
           .from('orders')
           .select(`
@@ -169,7 +169,7 @@ export function Dashboard() {
           `)
           .in('organization_id', orgIds)
           .order('created_at', { ascending: false })
-          .limit(20)
+          .limit(5)
 
         orderRecords = recordsData || []
       }
@@ -361,6 +361,13 @@ export function Dashboard() {
             Novo Pedido Manual
           </Button>
           <Button 
+            onClick={() => router.push('/registros-pedidos')}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3"
+          >
+            <ClipboardList className="w-5 h-5 mr-2" />
+            Registros de Pedidos
+          </Button>
+          <Button 
             onClick={() => router.push('/entregadores')}
             variant="outline"
             className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
@@ -414,136 +421,51 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* NOVA SEÇÃO: Registro de Pedidos */}
+        {/* Preview dos Registros de Pedidos */}
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl mb-8">
           <CardHeader>
-            <CardTitle className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-              <FileText className="w-6 h-6" />
-              Registro de Pedidos
-            </CardTitle>
-            <CardDescription>
-              Histórico completo das entregas realizadas
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                  <FileText className="w-6 h-6" />
+                  Últimos Registros
+                </CardTitle>
+                <CardDescription>
+                  Últimas entregas realizadas
+                </CardDescription>
+              </div>
+              <Button 
+                onClick={() => router.push('/registros-pedidos')}
+                variant="outline"
+                className="rounded-xl"
+              >
+                Ver Todos
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {data.orderRecords.map((record) => (
-                <Card key={record.id} className="bg-gradient-to-r from-gray-50 to-blue-50 border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      
-                      {/* Informações Principais */}
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl flex items-center justify-center">
-                            <span className="text-xl">
-                              {record.establishment_types?.emoji || '📦'}
-                            </span>
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{record.customer_name}</h3>
-                            <p className="text-sm text-gray-600">{record.customer_phone}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-start gap-2">
-                          <MapPin className="w-4 h-4 text-gray-500 mt-0.5" />
-                          <p className="text-sm text-gray-700">{record.delivery_address}</p>
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-green-600">R$ {record.value.toFixed(2)}</span>
-                          {getStatusBadge(record.status)}
-                        </div>
-                      </div>
-
-                      {/* Informações da Rota */}
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-gray-800 flex items-center gap-2">
-                          <Route className="w-4 h-4" />
-                          Dados da Rota
-                        </h4>
-                        
-                        <div className="space-y-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3 h-3 text-blue-500" />
-                            <span className="text-gray-600">Criado:</span>
-                            <span className="font-medium">{formatDate(record.created_at)}</span>
-                          </div>
-                          
-                          {record.route_started_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-3 h-3 text-orange-500" />
-                              <span className="text-gray-600">Iniciado:</span>
-                              <span className="font-medium">{formatDate(record.route_started_at)}</span>
-                            </div>
-                          )}
-                          
-                          {record.route_finished_at && (
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-3 h-3 text-green-500" />
-                              <span className="text-gray-600">Finalizado:</span>
-                              <span className="font-medium">{formatDate(record.route_finished_at)}</span>
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-4 pt-2">
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-600">Distância:</span>
-                              <span className="font-medium">
-                                {record.route_distance_km ? `${record.route_distance_km.toFixed(1)} km` : 'N/A'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-600">Duração:</span>
-                              <span className="font-medium">{formatDuration(record.route_duration_minutes)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Comprovante de Entrega */}
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-gray-800 flex items-center gap-2">
-                          <Camera className="w-4 h-4" />
-                          Comprovante
-                        </h4>
-                        
-                        {record.delivery_notes && (
-                          <div className="p-3 bg-yellow-50 rounded-xl border border-yellow-200">
-                            <p className="text-sm text-gray-700">
-                              <span className="font-medium">Observação:</span> {record.delivery_notes}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {record.delivery_photo_url ? (
-                          <div className="space-y-2">
-                            <p className="text-sm text-green-600 font-medium">✅ Foto de entrega anexada</p>
-                            <img 
-                              src={record.delivery_photo_url} 
-                              alt="Comprovante de entrega"
-                              className="w-full h-24 object-cover rounded-xl border border-gray-200"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">📷 Nenhuma foto anexada</p>
-                        )}
-                      </div>
+                <div key={record.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
+                      <span className="text-sm">
+                        {record.establishment_types?.emoji || '📦'}
+                      </span>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{record.customer_name}</h4>
+                      <p className="text-sm text-gray-600">R$ {record.value.toFixed(2)} • {formatDate(record.created_at)}</p>
+                    </div>
+                  </div>
+                  {getStatusBadge(record.status)}
+                </div>
               ))}
 
               {data.orderRecords.length === 0 && (
-                <div className="text-center py-12">
-                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Nenhum registro encontrado
-                  </h3>
-                  <p className="text-gray-600">
-                    Os registros de pedidos aparecerão aqui conforme as entregas forem realizadas
-                  </p>
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Nenhum registro encontrado</p>
                 </div>
               )}
             </div>
