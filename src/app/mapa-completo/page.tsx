@@ -9,8 +9,9 @@ import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { LoginForm } from '@/components/auth/LoginForm'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Map, Filter, Eye, EyeOff, Maximize2 } from 'lucide-react'
+import { ArrowLeft, Map, Filter, Eye, EyeOff, Maximize2, Minimize2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 interface Organization {
   id: string
@@ -50,6 +51,16 @@ export default function MapaCompletoPage() {
       loadMapData()
     }
   }, [user])
+
+  // Detectar mudanças no fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
 
   const loadMapData = async () => {
     if (!user) return
@@ -118,13 +129,31 @@ export default function MapaCompletoPage() {
     }
   }
 
-  const toggleFullscreen = () => {
-    if (!isFullscreen) {
-      document.documentElement.requestFullscreen?.()
-    } else {
-      document.exitFullscreen?.()
+  const toggleFullscreen = async () => {
+    try {
+      // Verificar se a API de fullscreen está disponível
+      if (!document.fullscreenEnabled) {
+        toast.error('Modo tela cheia não é suportado neste navegador')
+        return
+      }
+
+      if (!isFullscreen) {
+        // Entrar em fullscreen
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen()
+        } else {
+          toast.error('Não foi possível ativar o modo tela cheia')
+        }
+      } else {
+        // Sair do fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen()
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao alternar fullscreen:', error)
+      toast.error('Erro ao alternar modo tela cheia')
     }
-    setIsFullscreen(!isFullscreen)
   }
 
   const filteredOrders = orders.filter(order => {
@@ -322,7 +351,7 @@ export default function MapaCompletoPage() {
                 size="sm"
                 className="bg-white/90 backdrop-blur-sm rounded-xl"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
+                <Minimize2 className="w-4 h-4 mr-2" />
                 Sair da Tela Cheia
               </Button>
             </div>
