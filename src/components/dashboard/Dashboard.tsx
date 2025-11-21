@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { GoogleMap } from '@/components/map/GoogleMap'
-import { CategorySelector } from './CategorySelector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { Plus, Users, Map, Package, TrendingUp, FileText, ArrowLeft } from 'lucide-react'
+import { Plus, Users, Map, Package, TrendingUp, FileText } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 interface Organization {
@@ -33,13 +32,6 @@ interface Order {
   created_at: string
 }
 
-interface EstablishmentType {
-  id: string
-  name: string
-  emoji: string
-  icon_url: string
-}
-
 interface DashboardData {
   organizations: Array<{
     id: string
@@ -61,53 +53,9 @@ interface DashboardData {
   }
 }
 
-// Função para obter tema da categoria
-const getCategoryTheme = (categoryName: string) => {
-  const themes: Record<string, {
-    gradient: string
-    background: string
-    text: string
-    accent: string
-  }> = {
-    'Pizzaria': {
-      gradient: 'from-red-500 to-orange-500',
-      background: 'from-red-50 via-orange-50 to-yellow-50',
-      text: '#7f1d1d',
-      accent: '#dc2626'
-    },
-    'Hamburgueria': {
-      gradient: 'from-amber-500 to-yellow-500',
-      background: 'from-amber-50 via-yellow-50 to-orange-50',
-      text: '#92400e',
-      accent: '#d97706'
-    },
-    'Farmácia': {
-      gradient: 'from-blue-500 to-indigo-500',
-      background: 'from-blue-50 via-indigo-50 to-cyan-50',
-      text: '#1e3a8a',
-      accent: '#2563eb'
-    },
-    'Supermercado': {
-      gradient: 'from-green-500 to-emerald-500',
-      background: 'from-green-50 via-emerald-50 to-teal-50',
-      text: '#064e3b',
-      accent: '#059669'
-    }
-  }
-
-  return themes[categoryName] || {
-    gradient: 'from-blue-500 to-green-500',
-    background: 'from-blue-50 via-green-50 to-blue-100',
-    text: '#1f2937',
-    accent: '#3b82f6'
-  }
-}
-
 export function Dashboard() {
   const { user, signOut } = useAuth()
   const router = useRouter()
-  const [selectedCategory, setSelectedCategory] = useState<EstablishmentType | null>(null)
-  const [showCategorySelector, setShowCategorySelector] = useState(true)
   const [data, setData] = useState<DashboardData>({
     organizations: [],
     orders: [],
@@ -121,18 +69,6 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Verificar se já tem categoria selecionada
-    const savedCategory = localStorage.getItem('selectedCategory')
-    if (savedCategory) {
-      try {
-        const category = JSON.parse(savedCategory)
-        setSelectedCategory(category)
-        setShowCategorySelector(false)
-      } catch (error) {
-        console.error('Erro ao carregar categoria salva:', error)
-      }
-    }
-    
     loadDashboardData()
   }, [user])
 
@@ -222,17 +158,6 @@ export function Dashboard() {
     }
   }
 
-  const handleCategorySelect = (category: EstablishmentType) => {
-    setSelectedCategory(category)
-    setShowCategorySelector(false)
-  }
-
-  const handleBackToCategories = () => {
-    setShowCategorySelector(true)
-    setSelectedCategory(null)
-    localStorage.removeItem('selectedCategory')
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 flex items-center justify-center">
@@ -246,71 +171,19 @@ export function Dashboard() {
     )
   }
 
-  // Mostrar seletor de categoria
-  if (showCategorySelector) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
-                  <span className="text-xl font-bold text-white">R</span>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                    Rotalize
-                  </h1>
-                  <p className="text-sm text-gray-600">Selecione sua categoria</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">
-                  Olá, {user?.email}
-                </span>
-                <Button 
-                  variant="outline" 
-                  onClick={signOut}
-                  className="rounded-xl"
-                >
-                  Sair
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="container mx-auto px-4 py-8">
-          <CategorySelector onCategorySelect={handleCategorySelect} />
-        </div>
-      </div>
-    )
-  }
-
-  // Dashboard temático baseado na categoria
-  const theme = selectedCategory ? getCategoryTheme(selectedCategory.name) : getCategoryTheme('')
-
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${theme.background}`}>
-      {/* Header Temático */}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100">
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button 
-                variant="ghost" 
-                onClick={handleBackToCategories}
-                className="rounded-xl"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-              <div className={`inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br ${theme.gradient} rounded-xl shadow-lg`}>
-                <span className="text-xl text-white">{selectedCategory?.emoji}</span>
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-green-500 rounded-xl shadow-lg">
+                <span className="text-xl font-bold text-white">R</span>
               </div>
               <div>
-                <h1 className={`text-2xl font-bold bg-gradient-to-r ${theme.gradient} bg-clip-text text-transparent`}>
-                  {selectedCategory?.name} - Rotalize
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
+                  Rotalize
                 </h1>
                 <p className="text-sm text-gray-600">Dashboard</p>
               </div>
@@ -379,23 +252,23 @@ export function Dashboard() {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" style={{ color: theme.accent }} />
+                <TrendingUp className="w-4 h-4 text-blue-500" />
                 Receita Hoje
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold" style={{ color: theme.accent }}>
+              <div className="text-3xl font-bold text-blue-600">
                 R$ {data.stats.todayRevenue.toFixed(2)}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Botões de Ação Temáticos */}
+        {/* Botões de Ação */}
         <div className="flex flex-wrap gap-4 mb-8">
           <Button 
             onClick={() => router.push('/novo-pedido-manual')}
-            className={`bg-gradient-to-r ${theme.gradient} hover:opacity-90 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3`}
+            className="bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3"
           >
             <FileText className="w-5 h-5 mr-2" />
             Novo Pedido Manual
