@@ -298,6 +298,7 @@ export function Dashboard() {
             Produtos
           </Button>
           <Button 
+            onClick={() => router.push('/mapa-completo')}
             variant="outline"
             className="rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 px-6 py-3 border-2"
           >

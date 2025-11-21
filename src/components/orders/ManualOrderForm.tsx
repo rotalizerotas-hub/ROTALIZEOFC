@@ -11,9 +11,10 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
+import { AddressSearchMap } from '@/components/map/AddressSearchMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Home, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -25,7 +26,7 @@ const orderSchema = z.object({
   address_city: z.string().min(2, 'Cidade é obrigatória'),
   customer_name: z.string().min(2, 'Nome do cliente é obrigatório'),
   customer_id: z.string().optional(),
-  order_number: z.string().optional(), // NOVO CAMPO OPCIONAL
+  order_number: z.string().optional(),
 })
 
 type OrderFormData = z.infer<typeof orderSchema>
@@ -62,11 +63,22 @@ interface OrderItem {
   total_price: number
 }
 
+interface AddressData {
+  formatted_address: string
+  street: string
+  number: string
+  neighborhood: string
+  city: string
+  latitude: number
+  longitude: number
+}
+
 export function ManualOrderForm() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+  const [addressData, setAddressData] = useState<AddressData | null>(null)
   
   // Estados para dados
   const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
@@ -90,7 +102,7 @@ export function ManualOrderForm() {
       address_city: '',
       customer_name: '',
       customer_id: '',
-      order_number: '', // NOVO CAMPO
+      order_number: '',
     },
   })
 
@@ -166,6 +178,17 @@ export function ManualOrderForm() {
     }
   }
 
+  const handleAddressSelect = (address: AddressData) => {
+    console.log('📍 [ADDRESS] Endereço selecionado:', address)
+    setAddressData(address)
+    
+    // Preencher campos do formulário
+    form.setValue('address_street', address.street)
+    form.setValue('address_number', address.number)
+    form.setValue('address_neighborhood', address.neighborhood)
+    form.setValue('address_city', address.city)
+  }
+
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId)
     if (customer) {
@@ -228,14 +251,13 @@ export function ManualOrderForm() {
       return
     }
 
-    // REMOVIDO: Validação obrigatória de itens
-    // if (orderItems.length === 0) {
-    //   toast.error('Adicione pelo menos um item ao pedido')
-    //   return
-    // }
-
     if (!selectedDriverId) {
       toast.error('Selecione um entregador responsável')
+      return
+    }
+
+    if (!addressData) {
+      toast.error('Selecione um endereço válido no mapa')
       return
     }
 
@@ -243,11 +265,6 @@ export function ManualOrderForm() {
     
     try {
       console.log('📦 [MANUAL ORDER] Criando pedido manual...')
-
-      // Geocodificar endereço (simulado)
-      const fullAddress = `${data.address_street}, ${data.address_number}, ${data.address_neighborhood}, ${data.address_city}`
-      const delivery_latitude = -18.5122 + (Math.random() - 0.5) * 0.1
-      const delivery_longitude = -44.5550 + (Math.random() - 0.5) * 0.1
 
       // Buscar organização do usuário
       const { data: userOrgs } = await supabase
@@ -262,27 +279,27 @@ export function ManualOrderForm() {
 
       const organizationId = userOrgs[0].organization_id
 
-      // Criar pedido
+      // Criar pedido com coordenadas precisas do Google Maps
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
           organization_id: organizationId,
           customer_id: data.customer_id || null,
           customer_name: data.customer_name,
-          customer_phone: '', // Pode ser preenchido depois
-          delivery_address: fullAddress,
-          delivery_latitude,
-          delivery_longitude,
+          customer_phone: '',
+          delivery_address: addressData.formatted_address,
+          delivery_latitude: addressData.latitude,
+          delivery_longitude: addressData.longitude,
           address_street: data.address_street,
           address_number: data.address_number,
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
           delivery_driver_id: selectedDriverId,
-          value: getTotalValue(), // Pode ser 0 se não houver itens
-          status: 'assigned', // Já atribuído ao entregador
+          value: getTotalValue(),
+          status: 'assigned',
           is_manual: true,
-          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null // SALVAR NÚMERO DO PEDIDO
+          notes: data.order_number ? `Número do pedido: ${data.order_number}` : null
         })
         .select()
         .single()
@@ -404,15 +421,25 @@ export function ManualOrderForm() {
             </CardContent>
           </Card>
 
-          {/* Endereço */}
+          {/* Endereço com Mapa */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Home className="w-5 h-5" />
-                Endereço
+                <MapPin className="w-5 h-5" />
+                Endereço de Entrega
               </CardTitle>
+              <CardDescription>
+                Digite o endereço ou arraste o marcador no mapa para localização precisa
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              {/* Mapa de busca de endereço */}
+              <AddressSearchMap
+                onAddressSelect={handleAddressSelect}
+                initialAddress=""
+              />
+
+              {/* Campos de endereço preenchidos automaticamente */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <Label htmlFor="address_street">Rua</Label>
@@ -421,6 +448,7 @@ export function ManualOrderForm() {
                     {...form.register('address_street')}
                     placeholder="Nome da rua"
                     className="rounded-xl"
+                    readOnly
                   />
                   {form.formState.errors.address_street && (
                     <p className="text-sm text-red-500 mt-1">
@@ -435,6 +463,7 @@ export function ManualOrderForm() {
                     {...form.register('address_number')}
                     placeholder="123"
                     className="rounded-xl"
+                    readOnly
                   />
                   {form.formState.errors.address_number && (
                     <p className="text-sm text-red-500 mt-1">
@@ -451,6 +480,7 @@ export function ManualOrderForm() {
                     {...form.register('address_neighborhood')}
                     placeholder="Nome do bairro"
                     className="rounded-xl"
+                    readOnly
                   />
                   {form.formState.errors.address_neighborhood && (
                     <p className="text-sm text-red-500 mt-1">
@@ -465,6 +495,7 @@ export function ManualOrderForm() {
                     {...form.register('address_city')}
                     placeholder="Nome da cidade"
                     className="rounded-xl"
+                    readOnly
                   />
                   {form.formState.errors.address_city && (
                     <p className="text-sm text-red-500 mt-1">
@@ -473,6 +504,22 @@ export function ManualOrderForm() {
                   )}
                 </div>
               </div>
+
+              {/* Informações da localização */}
+              {addressData && (
+                <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <MapPin className="w-4 h-4" />
+                    <span className="font-medium">Localização confirmada</span>
+                  </div>
+                  <p className="text-sm text-green-600 mt-1">
+                    {addressData.formatted_address}
+                  </p>
+                  <p className="text-xs text-green-500 mt-1">
+                    Coordenadas: {addressData.latitude.toFixed(6)}, {addressData.longitude.toFixed(6)}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -689,7 +736,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !selectedDriverId} // REMOVIDO: orderItems.length === 0
+              disabled={loading || !selectedDriverId || !addressData}
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
