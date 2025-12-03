@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SearchableSelect } from '@/components/ui/searchable-select'
+import { CategorySelect } from '@/components/ui/category-select'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
@@ -377,7 +377,7 @@ export function ManualOrderForm() {
     }
   }
 
-  // Preparar opções para o SearchableSelect
+  // Preparar opções para o CategorySelect
   const categoryOptions = establishmentTypes.map(type => ({
     value: type.id,
     label: type.name,
@@ -427,7 +427,7 @@ export function ManualOrderForm() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <SearchableSelect
+              <CategorySelect
                 options={categoryOptions}
                 value={form.watch('establishment_type_id')}
                 onValueChange={(value) => {
@@ -436,7 +436,6 @@ export function ManualOrderForm() {
                 }}
                 placeholder="Busque por uma categoria..."
                 searchPlaceholder="Digite para buscar categorias..."
-                emptyText="Nenhuma categoria encontrada."
                 allowCreate={true}
                 onCreateNew={handleCreateCategory}
               />
