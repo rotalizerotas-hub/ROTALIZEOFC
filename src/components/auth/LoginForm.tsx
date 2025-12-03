@@ -1,12 +1,85 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Eye, EyeOff } from 'lucide-react'
 
 export function LoginForm() {
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+    
+    // Adiciona o botão de mostrar/ocultar senha depois que o componente é montado
+    const addPasswordToggle = () => {
+      setTimeout(() => {
+        const passwordFields = document.querySelectorAll('input[type="password"]')
+        
+        passwordFields.forEach(field => {
+          // Verificar se já existe um botão de toggle para este campo
+          const parentElement = field.parentElement
+          if (parentElement && !parentElement.querySelector('.password-toggle-btn')) {
+            // Criar o botão de toggle
+            const toggleBtn = document.createElement('button')
+            toggleBtn.type = 'button'
+            toggleBtn.className = 'password-toggle-btn'
+            toggleBtn.style.position = 'absolute'
+            toggleBtn.style.right = '12px'
+            toggleBtn.style.top = '50%'
+            toggleBtn.style.transform = 'translateY(-50%)'
+            toggleBtn.style.background = 'transparent'
+            toggleBtn.style.border = 'none'
+            toggleBtn.style.cursor = 'pointer'
+            toggleBtn.style.color = '#64748b'
+            toggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+            
+            // Garantir que o container tem position relative
+            if (parentElement.style.position !== 'relative') {
+              parentElement.style.position = 'relative'
+            }
+            
+            // Adicionar o botão ao DOM
+            parentElement.appendChild(toggleBtn)
+            
+            // Adicionar o evento de toggle
+            toggleBtn.addEventListener('click', () => {
+              const type = field.getAttribute('type') === 'password' ? 'text' : 'password'
+              field.setAttribute('type', type)
+              
+              // Trocar o ícone
+              if (type === 'text') {
+                toggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>'
+              } else {
+                toggleBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>'
+              }
+            })
+          }
+        })
+      }, 500) // Pequeno delay para garantir que o Auth UI já renderizou
+    }
+
+    // Executar quando montar e também sempre que houver mudança de view no Auth UI
+    addPasswordToggle()
+    
+    // Observer para detectar quando novos campos de senha são adicionados ao DOM
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.addedNodes.length) {
+          addPasswordToggle()
+        }
+      })
+    })
+    
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-green-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
