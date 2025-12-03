@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { CreateCategoryDialog } from '@/components/establishment-types/CreateCategoryDialog'
 
 const orderSchema = z.object({
   establishment_type_id: z.string().min(1, 'Selecione uma categoria'),
@@ -92,6 +93,10 @@ export function ManualOrderForm() {
   const [newProductPrice, setNewProductPrice] = useState(0)
   const [newItemQuantity, setNewItemQuantity] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState('')
+
+  // Estado para o dialog de nova categoria
+  const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
+  const [categorySearchTerm, setCategorySearchTerm] = useState('')
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -205,6 +210,25 @@ export function ManualOrderForm() {
   const handleDriverSelection = (driverId: string | null) => {
     setSelectedDriverId(driverId)
     console.log('🚚 [MANUAL ORDER] Entregador selecionado:', driverId)
+  }
+
+  const handleCreateCategory = (searchTerm: string) => {
+    setCategorySearchTerm(searchTerm)
+    setIsCreateCategoryOpen(true)
+  }
+
+  const handleCategoryCreated = (newCategory: { id: string; name: string; emoji: string }) => {
+    // Adicionar a nova categoria à lista
+    setEstablishmentTypes(prev => [...prev, {
+      id: newCategory.id,
+      name: newCategory.name,
+      emoji: newCategory.emoji,
+      icon_url: '',
+    }])
+
+    // Selecionar a nova categoria
+    form.setValue('establishment_type_id', newCategory.id)
+    toast.success(`Categoria "${newCategory.name}" criada e selecionada`)
   }
 
   const addOrderItem = () => {
@@ -413,6 +437,8 @@ export function ManualOrderForm() {
                 placeholder="Busque por uma categoria..."
                 searchPlaceholder="Digite para buscar categorias..."
                 emptyText="Nenhuma categoria encontrada."
+                allowCreate={true}
+                onCreateNew={handleCreateCategory}
               />
               {form.formState.errors.establishment_type_id && (
                 <p className="text-sm text-red-500 mt-1">
@@ -735,6 +761,14 @@ export function ManualOrderForm() {
           </div>
         </form>
       </div>
+
+      {/* Dialog para criar nova categoria */}
+      <CreateCategoryDialog
+        open={isCreateCategoryOpen}
+        onOpenChange={setIsCreateCategoryOpen}
+        onCategoryCreated={handleCategoryCreated}
+        searchTerm={categorySearchTerm}
+      />
     </div>
   )
 }
