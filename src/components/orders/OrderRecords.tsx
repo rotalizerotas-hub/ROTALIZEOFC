@@ -120,8 +120,49 @@ export function OrderRecords() {
         .in('organization_id', orgIds)
         .order('created_at', { ascending: false })
 
-      setOrderRecords(recordsData || [])
-      console.log('✅ [REGISTROS] Registros carregados:', recordsData?.length || 0)
+      // Mapear os dados e corrigir os formatos
+      const processedRecords: OrderRecord[] = recordsData?.map((record: any) => {
+        // Corrigir establishment_types (garantir que é um objeto, não um array)
+        const establishmentTypes = Array.isArray(record.establishment_types) && record.establishment_types.length > 0
+          ? {
+              name: record.establishment_types[0].name || 'Estabelecimento',
+              emoji: record.establishment_types[0].emoji || '📦'
+            }
+          : record.establishment_types || null;
+
+        // Corrigir delivery_drivers (garantir que é um objeto com profiles.full_name)
+        const deliveryDrivers = record.delivery_drivers && Array.isArray(record.delivery_drivers) && record.delivery_drivers.length > 0
+          ? {
+              profiles: {
+                full_name: record.delivery_drivers[0].profiles && Array.isArray(record.delivery_drivers[0].profiles) 
+                  ? record.delivery_drivers[0].profiles[0]?.full_name || 'Entregador'
+                  : record.delivery_drivers[0].profiles?.full_name || 'Entregador'
+              }
+            }
+          : record.delivery_drivers || null;
+
+        return {
+          id: record.id,
+          customer_name: record.customer_name,
+          customer_phone: record.customer_phone,
+          delivery_address: record.delivery_address,
+          value: record.value,
+          status: record.status,
+          created_at: record.created_at,
+          route_started_at: record.route_started_at,
+          route_finished_at: record.route_finished_at,
+          route_distance_km: record.route_distance_km,
+          route_duration_minutes: record.route_duration_minutes,
+          delivery_notes: record.delivery_notes,
+          delivery_photo_url: record.delivery_photo_url,
+          delivery_driver_id: record.delivery_driver_id,
+          establishment_types: establishmentTypes,
+          delivery_drivers: deliveryDrivers
+        };
+      }) || [];
+
+      setOrderRecords(processedRecords);
+      console.log('✅ [REGISTROS] Registros carregados:', processedRecords.length || 0);
 
     } catch (error) {
       console.error('❌ [REGISTROS] Erro ao carregar registros:', error)
@@ -155,7 +196,20 @@ export function OrderRecords() {
         `)
         .in('organization_id', orgIds)
 
-      setDrivers(driversData || [])
+      // Corrigir o formato dos dados dos entregadores
+      const processedDrivers: DeliveryDriver[] = driversData?.map((driver: any) => {
+        // Garantir que profiles seja um objeto com full_name
+        const profiles = Array.isArray(driver.profiles) && driver.profiles.length > 0
+          ? { full_name: driver.profiles[0].full_name || 'Entregador' }
+          : driver.profiles || { full_name: 'Entregador' };
+
+        return {
+          id: driver.id,
+          profiles: profiles
+        };
+      }) || [];
+
+      setDrivers(processedDrivers)
     } catch (error) {
       console.error('❌ [REGISTROS] Erro ao carregar entregadores:', error)
     }

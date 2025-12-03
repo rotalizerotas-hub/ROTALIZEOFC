@@ -171,7 +171,29 @@ export function Dashboard() {
           .order('created_at', { ascending: false })
           .limit(5)
 
-        orderRecords = recordsData || []
+        // Corrigir formato dos dados para OrderRecord[]
+        orderRecords = recordsData?.map((record: any) => ({
+          id: record.id,
+          customer_name: record.customer_name,
+          customer_phone: record.customer_phone,
+          delivery_address: record.delivery_address,
+          value: record.value,
+          status: record.status,
+          created_at: record.created_at,
+          route_started_at: record.route_started_at,
+          route_finished_at: record.route_finished_at,
+          route_distance_km: record.route_distance_km,
+          route_duration_minutes: record.route_duration_minutes,
+          delivery_notes: record.delivery_notes,
+          delivery_photo_url: record.delivery_photo_url,
+          // Garantir que establishment_types seja um objeto e não um array
+          establishment_types: Array.isArray(record.establishment_types) && record.establishment_types.length > 0 
+            ? {
+                name: record.establishment_types[0].name || 'Estabelecimento',
+                emoji: record.establishment_types[0].emoji || '📦'
+              }
+            : record.establishment_types || null
+        })) || []
       }
 
       // Calcular estatísticas
@@ -270,7 +292,7 @@ export function Dashboard() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                  Rotalize
+                  Rotas
                 </h1>
                 <p className="text-sm text-gray-600">Dashboard</p>
               </div>
