@@ -61,6 +61,11 @@ export function SearchableSelect({
     }
   }
 
+  const handleSelect = React.useCallback((optionValue: string) => {
+    onValueChange(optionValue);
+    setOpen(false);
+  }, [onValueChange]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -112,11 +117,9 @@ export function SearchableSelect({
             {options.map((option) => (
               <CommandItem
                 key={option.value}
-                value={option.label}
-                onSelect={() => {
-                  onValueChange(option.value)
-                  setOpen(false)
-                }}
+                value={option.value}
+                onSelect={() => handleSelect(option.value)}
+                className="cursor-pointer hover:bg-blue-50 data-[selected=true]:bg-blue-100 data-[selected=true]:text-blue-900"
               >
                 <div className="flex items-center gap-2 w-full">
                   {option.emoji && <span>{option.emoji}</span>}
