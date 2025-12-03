@@ -16,7 +16,7 @@ export function LoginForm() {
             <span className="text-3xl font-bold text-white">R</span>
           </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent mb-2">
-            Rotalize
+            Rotas
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
             Sistema de Gestão de Entregas
@@ -96,12 +96,14 @@ export function LoginForm() {
                   forgotten_password: {
                     email_label: 'E-mail',
                     button_label: 'Enviar instruções',
-                    loading_button_label: 'Enviando...',
+                    loading_button_label: 'Enviando instruções...',
                     link_text: 'Esqueceu sua senha?',
-                    confirmation_text: 'Verifique seu e-mail para redefinir a senha',
+                    confirmation_text: 'Verifique seu e-mail para redefinir sua senha',
                   },
                 },
               }}
+              redirectTo={typeof window !== 'undefined' ? window.location.origin : undefined}
+              view="sign_in"
             />
           </CardContent>
         </Card>
@@ -109,7 +111,7 @@ export function LoginForm() {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500">
-            © 2024 Rotalize. Todos os direitos reservados.
+            © 2024 Rotas. Todos os direitos reservados.
           </p>
         </div>
       </div>
