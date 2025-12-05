@@ -15,7 +15,7 @@ import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearchMap } from '@/components/map/AddressSearchMap'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin } from 'lucide-react'
+import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin, Truck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { CreateCategoryDialog } from '@/components/establishment-types/CreateCategoryDialog'
@@ -81,6 +81,9 @@ export function ManualOrderForm() {
   const [loading, setLoading] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [addressData, setAddressData] = useState<AddressData | null>(null)
+  
+  // NOVO: Estado para controlar se entregador é obrigatório
+  const [requireDriver, setRequireDriver] = useState(true)
   
   // Estados para dados
   const [establishmentTypes, setEstablishmentTypes] = useState<EstablishmentType[]>([])
@@ -276,7 +279,8 @@ export function ManualOrderForm() {
       return
     }
 
-    if (!selectedDriverId) {
+    // MODIFICADO: Só exigir entregador se requireDriver estiver ativo
+    if (requireDriver && !selectedDriverId) {
       toast.error('Selecione um entregador responsável')
       return
     }
@@ -304,6 +308,9 @@ export function ManualOrderForm() {
 
       const organizationId = userOrgs[0].organization_id
 
+      // MODIFICADO: Status baseado se tem entregador ou não
+      const orderStatus = requireDriver && selectedDriverId ? 'assigned' : 'pending'
+
       // Criar pedido com coordenadas precisas do Google Maps
       const { data: order, error: orderError } = await supabase
         .from('orders')
@@ -320,9 +327,9 @@ export function ManualOrderForm() {
           address_neighborhood: data.address_neighborhood,
           address_city: data.address_city,
           establishment_type_id: data.establishment_type_id,
-          delivery_driver_id: selectedDriverId,
+          delivery_driver_id: requireDriver ? selectedDriverId : null, // MODIFICADO
           value: getTotalValue(),
-          status: 'assigned',
+          status: orderStatus, // MODIFICADO
           is_manual: true,
           notes: data.order_number ? `Número do pedido: ${data.order_number}` : null
         })
@@ -349,25 +356,40 @@ export function ManualOrderForm() {
         if (itemsError) throw itemsError
       }
 
-      // Criar eventos
+      // MODIFICADO: Eventos baseados se tem entregador ou não
+      const events = [
+        {
+          order_id: order.id,
+          event_type: 'created',
+          description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}`
+        }
+      ]
+
+      if (requireDriver && selectedDriverId) {
+        events.push({
+          order_id: order.id,
+          event_type: 'assigned',
+          description: 'Pedido atribuído ao entregador'
+        })
+      } else {
+        events.push({
+          order_id: order.id,
+          event_type: 'route_marked',
+          description: 'Rota marcada no mapa - aguardando entregador'
+        })
+      }
+
       await supabase
         .from('order_events')
-        .insert([
-          {
-            order_id: order.id,
-            event_type: 'created',
-            description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}`
-          },
-          {
-            order_id: order.id,
-            event_type: 'assigned',
-            description: 'Pedido atribuído ao entregador'
-          }
-        ])
+        .insert(events)
 
       console.log('✅ [MANUAL ORDER] Pedido criado com sucesso:', order.id)
 
-      toast.success('Pedido manual criado e atribuído com sucesso!')
+      const successMessage = requireDriver && selectedDriverId 
+        ? 'Pedido manual criado e atribuído com sucesso!'
+        : 'Pedido manual criado! Rota marcada no mapa aguardando entregador.'
+
+      toast.success(successMessage)
       router.push('/')
     } catch (error) {
       console.error('❌ [MANUAL ORDER] Erro ao criar pedido:', error)
@@ -549,20 +571,86 @@ export function ManualOrderForm() {
             </CardContent>
           </Card>
 
-          {/* COMPONENTE DE ENTREGADORES RESPONSÁVEL */}
+          {/* COMPONENTE DE ENTREGADORES RESPONSÁVEL - MODIFICADO */}
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
             <CardHeader>
-              <CardTitle>Entregador Responsável</CardTitle>
-              <CardDescription>
-                Selecione um entregador ativo ou ative o modo automático
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-5 h-5" />
+                  <div>
+                    <CardTitle>Entregador Responsável</CardTitle>
+                    <CardDescription>
+                      {requireDriver 
+                        ? 'Selecione um entregador ativo ou ative o modo automático'
+                        : 'Modo desligado - Rota será marcada no mapa sem entregador'
+                      }
+                    </CardDescription>
+                  </div>
+                </div>
+                
+                {/* NOVO: Toggle Switch Neon */}
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-medium transition-colors ${requireDriver ? 'text-gray-900' : 'text-gray-400'}`}>
+                    {requireDriver ? 'Ligado' : 'Desligado'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRequireDriver(!requireDriver)}
+                    className={`
+                      relative inline-flex h-8 w-14 items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white
+                      ${requireDriver 
+                        ? 'bg-gradient-to-r from-green-400 to-green-600 shadow-lg shadow-green-500/50 focus:ring-green-500' 
+                        : 'bg-gray-300 focus:ring-gray-400'
+                      }
+                    `}
+                  >
+                    <span
+                      className={`
+                        inline-block h-6 w-6 transform rounded-full bg-white transition-all duration-300 shadow-lg
+                        ${requireDriver 
+                          ? 'translate-x-7 shadow-green-200' 
+                          : 'translate-x-1 shadow-gray-200'
+                        }
+                      `}
+                    >
+                      {/* Efeito de brilho neon quando ligado */}
+                      {requireDriver && (
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-green-400 to-green-600 opacity-20 animate-pulse"></div>
+                      )}
+                    </span>
+                    
+                    {/* Brilho neon ao redor do toggle quando ligado */}
+                    {requireDriver && (
+                      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-green-400 to-green-600 opacity-30 blur-sm animate-pulse"></div>
+                    )}
+                  </button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <ActiveDriverSelector
-                onDriverSelect={handleDriverSelection}
-                selectedDriverId={selectedDriverId || undefined}
-                disabled={loading}
-              />
+              {requireDriver ? (
+                <ActiveDriverSelector
+                  onDriverSelect={handleDriverSelection}
+                  selectedDriverId={selectedDriverId || undefined}
+                  disabled={loading}
+                />
+              ) : (
+                <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        Modo Rota Livre Ativado
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        O pedido será criado e a rota marcada no mapa. Um entregador poderá assumir posteriormente.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -752,7 +840,7 @@ export function ManualOrderForm() {
             </Button>
             <Button
               type="submit"
-              disabled={loading || !selectedDriverId || !addressData}
+              disabled={loading || (requireDriver && !selectedDriverId) || !addressData}
               className="flex-1 bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white rounded-xl"
             >
               {loading ? 'Criando...' : 'Criar Pedido'}
