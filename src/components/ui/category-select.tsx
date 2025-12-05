@@ -164,29 +164,28 @@ export function CategorySelect({
             
             {filteredOptions.length > 0 && (
               <CommandGroup>
-                <div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">
+                <div className="text-xs font-medium text-gray-600 px-2 py-1 mb-1">
                   {filteredOptions.length} categoria{filteredOptions.length !== 1 ? 's' : ''} encontrada{filteredOptions.length !== 1 ? 's' : ''}
                 </div>
                 {filteredOptions.map((option) => (
-                  <CommandItem
+                  <div
                     key={option.value}
-                    value={option.label}
-                    onSelect={() => handleSelect(option.value)}
-                    className="cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-transparent"
+                    className="cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-gray-200 bg-white"
+                    onClick={() => handleSelect(option.value)}
                   >
-                    <div className="flex items-center gap-3 flex-1 w-full">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 group-hover:from-blue-100 group-hover:to-blue-200 flex items-center justify-center transition-all duration-150">
+                    <div className="flex items-center gap-3 w-full pointer-events-none">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 group-hover:from-blue-200 group-hover:to-blue-300 flex items-center justify-center transition-all duration-150">
                         <span className="text-lg">{option.emoji}</span>
                       </div>
                       <div className="flex-1">
-                        <span className="font-medium text-sm">
+                        <span className="font-medium text-sm text-gray-900">
                           {highlightMatch(option.label, searchValue)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Check
                           className={cn(
-                            "h-4 w-4 text-primary transition-opacity duration-150",
+                            "h-4 w-4 text-blue-600 transition-opacity duration-150",
                             value === option.value ? "opacity-100" : "opacity-0"
                           )}
                         />
@@ -197,31 +196,30 @@ export function CategorySelect({
                             e.stopPropagation()
                             handleSelect(option.value)
                           }}
-                          className="h-7 px-3 text-xs font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                          className="h-7 px-3 text-xs font-medium hover:bg-blue-600 hover:text-white transition-colors pointer-events-auto border-blue-300 text-blue-700"
                         >
                           Usar
                         </Button>
                       </div>
                     </div>
-                  </CommandItem>
+                  </div>
                 ))}
               </CommandGroup>
             )}
             
             {allowCreate && searchValue.trim() && filteredOptions.length === 0 && (
               <CommandGroup>
-                <CommandItem
-                  value={searchValue}
-                  onSelect={handleCreateNew}
-                  className="cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-transparent"
+                <div
+                  className="cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-gray-200 bg-white"
+                  onClick={handleCreateNew}
                 >
-                  <div className="flex items-center gap-3 flex-1 w-full">
+                  <div className="flex items-center gap-3 w-full pointer-events-none">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-100 to-green-200 group-hover:from-green-200 group-hover:to-green-300 flex items-center justify-center transition-all duration-150">
                       <Sparkles className="h-5 w-5 text-green-600" />
                     </div>
                     <div className="flex-1">
-                      <span className="font-medium text-sm">Criar categoria "{searchValue}"</span>
-                      <p className="text-xs text-muted-foreground">Nova categoria personalizada</p>
+                      <span className="font-medium text-sm text-gray-900">Criar categoria "{searchValue}"</span>
+                      <p className="text-xs text-gray-600">Nova categoria personalizada</p>
                     </div>
                     <Button
                       size="sm"
@@ -230,12 +228,12 @@ export function CategorySelect({
                         e.stopPropagation()
                         handleCreateNew()
                       }}
-                      className="h-7 px-3 text-xs font-medium hover:bg-green-600 hover:text-white transition-colors"
+                      className="h-7 px-3 text-xs font-medium hover:bg-green-600 hover:text-white transition-colors pointer-events-auto border-green-300 text-green-700"
                     >
                       Usar
                     </Button>
                   </div>
-                </CommandItem>
+                </div>
               </CommandGroup>
             )}
           </CommandList>
