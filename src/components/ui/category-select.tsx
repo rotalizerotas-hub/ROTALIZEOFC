@@ -172,10 +172,10 @@ export function CategorySelect({
                     key={option.value}
                     value={option.label}
                     onSelect={() => handleSelect(option.value)}
-                    className="cursor-pointer hover:bg-accent/80 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group"
+                    className="cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-transparent"
                   >
                     <div className="flex items-center gap-3 flex-1 w-full">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 group-hover:from-primary/20 group-hover:to-primary/30 flex items-center justify-center transition-all duration-150">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/10 to-primary/20 group-hover:from-blue-100 group-hover:to-blue-200 flex items-center justify-center transition-all duration-150">
                         <span className="text-lg">{option.emoji}</span>
                       </div>
                       <div className="flex-1">
@@ -183,12 +183,25 @@ export function CategorySelect({
                           {highlightMatch(option.label, searchValue)}
                         </span>
                       </div>
-                      <Check
-                        className={cn(
-                          "h-4 w-4 text-primary transition-opacity duration-150",
-                          value === option.value ? "opacity-100" : "opacity-0"
-                        )}
-                      />
+                      <div className="flex items-center gap-2">
+                        <Check
+                          className={cn(
+                            "h-4 w-4 text-primary transition-opacity duration-150",
+                            value === option.value ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSelect(option.value)
+                          }}
+                          className="h-7 px-3 text-xs font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                        >
+                          Usar
+                        </Button>
+                      </div>
                     </div>
                   </CommandItem>
                 ))}
@@ -200,7 +213,7 @@ export function CategorySelect({
                 <CommandItem
                   value={searchValue}
                   onSelect={handleCreateNew}
-                  className="cursor-pointer hover:bg-accent/80 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group"
+                  className="cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-transparent"
                 >
                   <div className="flex items-center gap-3 flex-1 w-full">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-100 to-green-200 group-hover:from-green-200 group-hover:to-green-300 flex items-center justify-center transition-all duration-150">
@@ -210,6 +223,17 @@ export function CategorySelect({
                       <span className="font-medium text-sm">Criar categoria "{searchValue}"</span>
                       <p className="text-xs text-muted-foreground">Nova categoria personalizada</p>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCreateNew()
+                      }}
+                      className="h-7 px-3 text-xs font-medium hover:bg-green-600 hover:text-white transition-colors"
+                    >
+                      Usar
+                    </Button>
                   </div>
                 </CommandItem>
               </CommandGroup>
