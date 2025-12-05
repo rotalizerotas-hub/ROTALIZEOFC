@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Camera, Mic, FileText, X, Play, Pause, Trash2, Download } from 'lucide-react'
+import { Camera, Mic, FileText, X, Play, Pause, Trash2, Upload, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 export interface OrderMedia {
@@ -31,8 +31,11 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [playingAudio, setPlayingAudio] = useState<string | null>(null)
+  const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
+  const [microphonePermission, setMicrophonePermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const audioInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -41,9 +44,32 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  // Verificar permissões do navegador
+  const checkPermissions = async () => {
+    try {
+      // Verificar permissão da câmera
+      if (navigator.permissions) {
+        const cameraResult = await navigator.permissions.query({ name: 'camera' as PermissionName })
+        setCameraPermission(cameraResult.state)
+        
+        const micResult = await navigator.permissions.query({ name: 'microphone' as PermissionName })
+        setMicrophonePermission(micResult.state)
+      }
+    } catch (error) {
+      console.log('Permissions API não suportada:', error)
+    }
+  }
+
   // Função para capturar foto da câmera
   const capturePhoto = async () => {
     try {
+      console.log('🔄 Tentando acessar câmera...')
+      
+      // Verificar se getUserMedia está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia não suportado neste navegador')
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'environment', // Câmera traseira no mobile
@@ -51,6 +77,9 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
           height: { ideal: 720 }
         } 
       })
+      
+      console.log('✅ Câmera acessada com sucesso')
+      setCameraPermission('granted')
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -62,11 +91,25 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
           takePhoto(stream)
         }, 1000)
       }
-    } catch (error) {
-      console.error('Erro ao acessar câmera:', error)
-      toast.error('Erro ao acessar a câmera. Tente selecionar uma foto da galeria.')
-      // Fallback para seleção de arquivo
-      fileInputRef.current?.click()
+    } catch (error: any) {
+      console.error('❌ Erro ao acessar câmera:', error)
+      setCameraPermission('denied')
+      
+      // Mensagens específicas baseadas no tipo de erro
+      if (error.name === 'NotAllowedError') {
+        toast.error('Permissão da câmera negada. Clique em "Selecionar Foto" para escolher uma imagem da galeria.')
+      } else if (error.name === 'NotFoundError') {
+        toast.error('Câmera não encontrada. Clique em "Selecionar Foto" para escolher uma imagem.')
+      } else if (error.name === 'NotSupportedError') {
+        toast.error('Câmera não suportada. Use "Selecionar Foto" para escolher uma imagem.')
+      } else {
+        toast.error('Erro ao acessar câmera. Use "Selecionar Foto" como alternativa.')
+      }
+      
+      // Fallback automático para seleção de arquivo
+      setTimeout(() => {
+        fileInputRef.current?.click()
+      }, 1000)
     }
   }
 
@@ -130,6 +173,36 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
       setMediaItems(updatedMedia)
       onMediaChange(updatedMedia)
       toast.success('Foto selecionada com sucesso!')
+    } else {
+      toast.error('Por favor, selecione um arquivo de imagem válido.')
+    }
+    
+    // Limpar input
+    event.target.value = ''
+  }
+
+  // Função para selecionar áudio da galeria
+  const selectAudio = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file && file.type.startsWith('audio/')) {
+      const url = URL.createObjectURL(file)
+      
+      const newMedia: OrderMedia = {
+        id: Date.now().toString(),
+        type: 'audio',
+        file,
+        url,
+        fileName: file.name,
+        size: file.size,
+        timestamp: Date.now()
+      }
+      
+      const updatedMedia = [...mediaItems, newMedia]
+      setMediaItems(updatedMedia)
+      onMediaChange(updatedMedia)
+      toast.success('Áudio selecionado com sucesso!')
+    } else {
+      toast.error('Por favor, selecione um arquivo de áudio válido.')
     }
     
     // Limpar input
@@ -139,7 +212,16 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
   // Função para gravar áudio
   const startRecording = async () => {
     try {
+      console.log('🔄 Tentando acessar microfone...')
+      
+      // Verificar se getUserMedia está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia não suportado neste navegador')
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log('✅ Microfone acessado com sucesso')
+      setMicrophonePermission('granted')
       streamRef.current = stream
       
       const mediaRecorder = new MediaRecorder(stream)
@@ -183,9 +265,25 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
         setRecordingTime(prev => prev + 1)
       }, 1000)
       
-    } catch (error) {
-      console.error('Erro ao acessar microfone:', error)
-      toast.error('Erro ao acessar o microfone')
+    } catch (error: any) {
+      console.error('❌ Erro ao acessar microfone:', error)
+      setMicrophonePermission('denied')
+      
+      // Mensagens específicas baseadas no tipo de erro
+      if (error.name === 'NotAllowedError') {
+        toast.error('Permissão do microfone negada. Clique em "Selecionar Áudio" para escolher um arquivo de áudio.')
+      } else if (error.name === 'NotFoundError') {
+        toast.error('Microfone não encontrado. Use "Selecionar Áudio" para escolher um arquivo.')
+      } else if (error.name === 'NotSupportedError') {
+        toast.error('Gravação não suportada. Use "Selecionar Áudio" para escolher um arquivo.')
+      } else {
+        toast.error('Erro ao acessar microfone. Use "Selecionar Áudio" como alternativa.')
+      }
+      
+      // Fallback automático para seleção de arquivo
+      setTimeout(() => {
+        audioInputRef.current?.click()
+      }, 1000)
     }
   }
 
@@ -277,6 +375,11 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
   }
 
+  // Verificar permissões ao montar o componente
+  React.useEffect(() => {
+    checkPermissions()
+  }, [])
+
   return (
     <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg rounded-2xl">
       <CardHeader>
@@ -290,34 +393,62 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
         {/* Botões de Captura */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Câmera */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={capturePhoto}
-            disabled={disabled}
-            className="h-20 rounded-xl flex flex-col items-center gap-2 hover:bg-blue-50"
-          >
-            <Camera className="w-6 h-6 text-blue-600" />
-            <span className="text-sm font-medium">Tirar Foto</span>
-          </Button>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={capturePhoto}
+              disabled={disabled}
+              className="w-full h-20 rounded-xl flex flex-col items-center gap-2 hover:bg-blue-50"
+            >
+              <Camera className="w-6 h-6 text-blue-600" />
+              <span className="text-sm font-medium">Tirar Foto</span>
+            </Button>
+            
+            {/* Botão alternativo para selecionar foto */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              className="w-full h-10 rounded-xl text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Selecionar Foto
+            </Button>
+          </div>
 
           {/* Áudio */}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={disabled}
-            className={`h-20 rounded-xl flex flex-col items-center gap-2 ${
-              isRecording 
-                ? 'bg-red-50 border-red-200 hover:bg-red-100' 
-                : 'hover:bg-green-50'
-            }`}
-          >
-            <Mic className={`w-6 h-6 ${isRecording ? 'text-red-600' : 'text-green-600'}`} />
-            <span className="text-sm font-medium">
-              {isRecording ? `Gravando ${formatTime(recordingTime)}` : 'Gravar Áudio'}
-            </span>
-          </Button>
+          <div className="space-y-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={disabled}
+              className={`w-full h-20 rounded-xl flex flex-col items-center gap-2 ${
+                isRecording 
+                  ? 'bg-red-50 border-red-200 hover:bg-red-100' 
+                  : 'hover:bg-green-50'
+              }`}
+            >
+              <Mic className={`w-6 h-6 ${isRecording ? 'text-red-600' : 'text-green-600'}`} />
+              <span className="text-sm font-medium">
+                {isRecording ? `Gravando ${formatTime(recordingTime)}` : 'Gravar Áudio'}
+              </span>
+            </Button>
+            
+            {/* Botão alternativo para selecionar áudio */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => audioInputRef.current?.click()}
+              disabled={disabled}
+              className="w-full h-10 rounded-xl text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Selecionar Áudio
+            </Button>
+          </div>
 
           {/* Nota */}
           <div className="space-y-2">
@@ -340,6 +471,24 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
             </Button>
           </div>
         </div>
+
+        {/* Aviso sobre permissões */}
+        {(cameraPermission === 'denied' || microphonePermission === 'denied') && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+            <div className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="w-4 h-4" />
+              <span className="font-medium">Permissões de Mídia</span>
+            </div>
+            <p className="text-sm text-amber-600 mt-1">
+              {cameraPermission === 'denied' && microphonePermission === 'denied' 
+                ? 'Câmera e microfone bloqueados. Use os botões "Selecionar" para escolher arquivos.'
+                : cameraPermission === 'denied' 
+                ? 'Câmera bloqueada. Use "Selecionar Foto" para escolher uma imagem.'
+                : 'Microfone bloqueado. Use "Selecionar Áudio" para escolher um arquivo de áudio.'
+              }
+            </p>
+          </div>
+        )}
 
         {/* Lista de Mídias Capturadas */}
         {mediaItems.length > 0 && (
@@ -433,6 +582,13 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
           type="file"
           accept="image/*"
           onChange={selectPhoto}
+          className="hidden"
+        />
+        <input
+          ref={audioInputRef}
+          type="file"
+          accept="audio/*"
+          onChange={selectAudio}
           className="hidden"
         />
         <video
