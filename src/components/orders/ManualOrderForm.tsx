@@ -699,33 +699,53 @@ export function ManualOrderForm() {
             </CardHeader>
             <CardContent className="space-y-6">
               
-              {/* NOVO CAMPO: Número do Pedido */}
-              <div className="space-y-2">
-                <Label htmlFor="order_number" className="flex items-center gap-2">
-                  <Hash className="w-4 h-4" />
-                  Número do Pedido (Opcional)
-                </Label>
-                <Input
-                  id="order_number"
-                  {...form.register('order_number')}
-                  placeholder="Digite o número do pedido (ex: 12345)"
-                  className="rounded-xl"
-                />
-                <p className="text-xs text-gray-500">
-                  Campo opcional para identificar o pedido com um número específico
-                </p>
+              {/* MODIFICADO: Nome do Cliente e Número do Pedido na mesma linha */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Nome do Cliente - ocupa 3 colunas */}
+                <div className="md:col-span-3 space-y-2">
+                  <Label htmlFor="customer_name" className="flex items-center gap-2">
+                    <UserPlus className="w-4 h-4" />
+                    Nome do Cliente
+                  </Label>
+                  <Input
+                    id="customer_name"
+                    {...form.register('customer_name')}
+                    placeholder="Digite o nome do cliente"
+                    className="rounded-xl"
+                  />
+                  {form.formState.errors.customer_name && (
+                    <p className="text-sm text-red-500">
+                      {form.formState.errors.customer_name.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Número do Pedido - ocupa 1 coluna */}
+                <div className="space-y-2">
+                  <Label htmlFor="order_number" className="flex items-center gap-2">
+                    <Hash className="w-4 h-4" />
+                    Nº Pedido
+                  </Label>
+                  <Input
+                    id="order_number"
+                    {...form.register('order_number')}
+                    placeholder="12345"
+                    className="rounded-xl"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Opcional
+                  </p>
+                
+                </div>
               </div>
 
-              {/* Nome do Cliente */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="customer_name">Nome do Cliente</Label>
-                </div>
-                
-                {customers.length > 0 && (
+              {/* Seletor de Cliente Existente */}
+              {customers.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Ou selecione um cliente existente</Label>
                   <Select onValueChange={handleCustomerSelect}>
                     <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Ou selecione um cliente existente" />
+                      <SelectValue placeholder="Buscar cliente cadastrado..." />
                     </SelectTrigger>
                     <SelectContent>
                       {customers.map((customer) => (
@@ -738,20 +758,8 @@ export function ManualOrderForm() {
                       ))}
                     </SelectContent>
                   </Select>
-                )}
-
-                <Input
-                  id="customer_name"
-                  {...form.register('customer_name')}
-                  placeholder="Digite o nome do cliente"
-                  className="rounded-xl"
-                />
-                {form.formState.errors.customer_name && (
-                  <p className="text-sm text-red-500">
-                    {form.formState.errors.customer_name.message}
-                  </p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Lista de Itens (OPCIONAL) */}
               <div className="space-y-4">
