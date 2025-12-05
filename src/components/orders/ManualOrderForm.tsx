@@ -257,10 +257,10 @@ export function ManualOrderForm() {
     console.log('📍 [ADDRESS] Endereço selecionado:', address)
     setAddressData(address)
     
-    // Preencher campos do formulário - CORRIGIDO: address_neighborhood
+    // Preencher campos do formulário
     form.setValue('address_street', address.street)
     form.setValue('address_number', address.number)
-    form.setValue('address_neighborhood', address.neighborhood)
+    form.setValue('address_neighborhoo', address.neighborhood)
     form.setValue('address_city', address.city)
   }
 
@@ -747,7 +747,7 @@ export function ManualOrderForm() {
                 <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                      <MapPin className="w-6  h-6 text-white" />
+                      <MapPin className="w-6 h-6 text-white" />
                     </div>
                     <div>
                       <div className="font-medium text-gray-900">
