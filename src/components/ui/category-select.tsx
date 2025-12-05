@@ -66,6 +66,16 @@ export function CategorySelect({
     }
   }
 
+  const handleCreateNewFromPlus = () => {
+    if (onCreateNew) {
+      // Se não há searchValue, criar uma categoria genérica ou abrir modal
+      const newCategoryName = searchValue.trim() || "Nova Categoria"
+      onCreateNew(newCategoryName)
+      setOpen(false)
+      setSearchValue("")
+    }
+  }
+
   const clearSearch = () => {
     setSearchValue("")
   }
@@ -139,13 +149,22 @@ export function CategorySelect({
           <CommandList className="max-h-[320px] overflow-y-auto p-2">
             <CommandEmpty className="py-8 text-center">
               <div className="space-y-3">
-                <div className="w-16 h-16 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-                  <Plus className="h-8 w-8 text-green-600" />
+                <div 
+                  className="w-16 h-16 mx-auto rounded-full bg-gradient-to-r from-green-100 via-green-200 to-green-100 flex items-center justify-center cursor-pointer hover:from-green-200 hover:via-green-300 hover:to-green-200 transition-all duration-300 relative overflow-hidden group"
+                  onClick={handleCreateNewFromPlus}
+                >
+                  {/* Efeito de brilho animado */}
+                  <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
+                  
+                  {/* Animação de brilho contínua */}
+                  <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                  
+                  <Plus className="h-8 w-8 text-green-600 relative z-10 group-hover:scale-110 transition-transform duration-200" />
                 </div>
                 <div>
                   <p className="font-medium text-sm">Nenhuma categoria encontrada</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Tente buscar com outros termos
+                    Tente buscar com outros termos ou clique no + para criar
                   </p>
                 </div>
                 {allowCreate && searchValue.trim() && (
