@@ -260,7 +260,7 @@ export function ManualOrderForm() {
     // Preencher campos do formulário
     form.setValue('address_street', address.street)
     form.setValue('address_number', address.number)
-    form.setValue('address_neighborhoo', address.neighborhood)
+    form.setValue('address_neighborhood', address.neighborhood)
     form.setValue('address_city', address.city)
   }
 
