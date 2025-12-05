@@ -24,6 +24,10 @@ interface GoogleMapProps {
     delivery_latitude: number
     delivery_longitude: number
     status: string
+    establishment_type?: {
+      name: string
+      emoji: string
+    }
   }>
   className?: string
 }
@@ -48,6 +52,22 @@ const getEstablishmentColor = (type: string): string => {
     'Hamburgueria': '#4ecdc4',
     'Farmácia': '#45b7d1',
     'Supermercado': '#96ceb4',
+    'Restaurante': '#fd79a8',
+    'Lanchonete': '#fdcb6e',
+    'Padaria': '#e17055',
+    'Sorveteria': '#74b9ff',
+    'Cafeteria': '#6c5ce7',
+    'Bar': '#a29bfe',
+    'Açougue': '#e84393',
+    'Mercado': '#00b894',
+    'Conveniência': '#00cec9',
+    'Posto': '#ffeaa7',
+    'Mecânica': '#636e72',
+    'Hospital': '#ff7675',
+    'Clínica': '#fd79a8',
+    'Dentista': '#fdcb6e',
+    'Ótica': '#74b9ff',
+    'Perfumaria': '#e17055',
   }
   return colorMap[type] || '#6c5ce7'
 }
@@ -59,8 +79,53 @@ const getOrderColor = (status: string): string => {
     'assigned': '#6c5ce7',
     'in_transit': '#fd79a8',
     'delivered': '#00b894',
+    'cancelled': '#ddd',
   }
   return colorMap[status] || '#ddd'
+}
+
+// Função para criar ícone personalizado com emoji
+const createCustomIcon = (emoji: string, backgroundColor: string, size: number = 50): string => {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  
+  if (!ctx) return ''
+  
+  canvas.width = size
+  canvas.height = size
+  
+  // Fundo circular com gradiente 3D
+  const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2)
+  gradient.addColorStop(0, backgroundColor)
+  gradient.addColorStop(0.7, backgroundColor)
+  gradient.addColorStop(1, '#000000')
+  
+  ctx.fillStyle = gradient
+  ctx.beginPath()
+  ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI)
+  ctx.fill()
+  
+  // Borda branca para destaque
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI)
+  ctx.stroke()
+  
+  // Sombra interna para efeito 3D
+  ctx.shadowColor = 'rgba(0,0,0,0.3)'
+  ctx.shadowBlur = 5
+  ctx.shadowOffsetX = 2
+  ctx.shadowOffsetY = 2
+  
+  // Emoji no centro
+  ctx.font = `${size * 0.5}px Arial`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#000000'
+  ctx.fillText(emoji, size/2, size/2)
+  
+  return canvas.toDataURL()
 }
 
 // Componente do mapa
@@ -95,29 +160,51 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
 
     // Adicionar marcadores para organizações
     organizations.forEach(org => {
+      const backgroundColor = getEstablishmentColor(org.establishment_type.name)
+      const customIcon = createCustomIcon(org.establishment_type.emoji || '🏪', backgroundColor, 60)
+      
       const marker = new window.google.maps.Marker({
         position: { lat: org.latitude, lng: org.longitude },
         map: map.current,
         title: org.name,
         icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 12,
-          fillColor: getEstablishmentColor(org.establishment_type.name),
-          fillOpacity: 0.9,
-          strokeColor: '#ffffff',
-          strokeWeight: 3,
+          url: customIcon,
+          scaledSize: new window.google.maps.Size(60, 60),
+          anchor: new window.google.maps.Point(30, 30)
         }
       })
 
       // InfoWindow para organizações
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
-          <div style="padding: 12px; font-family: system-ui;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <span style="font-size: 24px;">${org.establishment_type.emoji || '🏪'}</span>
-              <h3 style="margin: 0; font-weight: 600; color: #1f2937;">${org.name || 'Estabelecimento'}</h3>
+          <div style="padding: 16px; font-family: system-ui; min-width: 200px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <div style="
+                width: 48px; 
+                height: 48px; 
+                background: linear-gradient(135deg, ${backgroundColor}, ${backgroundColor}dd);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              ">
+                ${org.establishment_type.emoji || '🏪'}
+              </div>
+              <div>
+                <h3 style="margin: 0; font-weight: 600; color: #1f2937; font-size: 16px;">${org.name || 'Estabelecimento'}</h3>
+                <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280;">${org.establishment_type.name || 'Tipo não informado'}</p>
+              </div>
             </div>
-            <p style="margin: 0; font-size: 14px; color: #6b7280;">${org.establishment_type.name || 'Tipo não informado'}</p>
+            <div style="
+              padding: 8px 12px;
+              background: linear-gradient(135deg, ${backgroundColor}20, ${backgroundColor}10);
+              border-radius: 8px;
+              border-left: 4px solid ${backgroundColor};
+            ">
+              <span style="font-size: 12px; color: #374151; font-weight: 500;">📍 Estabelecimento Ativo</span>
+            </div>
           </div>
         `
       })
@@ -131,27 +218,70 @@ function MapComponent({ organizations = [], orders = [], className = '' }: Googl
 
     // Adicionar marcadores para pedidos
     orders.forEach(order => {
+      const statusColor = getOrderColor(order.status)
+      const categoryEmoji = order.establishment_type?.emoji || '📦'
+      const categoryColor = order.establishment_type ? getEstablishmentColor(order.establishment_type.name) : statusColor
+      
+      // Usar emoji da categoria se disponível, senão usar ícone baseado no status
+      const displayEmoji = order.establishment_type?.emoji || '📦'
+      const customIcon = createCustomIcon(displayEmoji, categoryColor, 50)
+      
       const marker = new window.google.maps.Marker({
         position: { lat: order.delivery_latitude, lng: order.delivery_longitude },
         map: map.current,
         title: order.customer_name,
         icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: getOrderColor(order.status),
-          fillOpacity: 0.8,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
+          url: customIcon,
+          scaledSize: new window.google.maps.Size(50, 50),
+          anchor: new window.google.maps.Point(25, 25)
         }
       })
 
       // InfoWindow para pedidos
       const statusText = getStatusText(order.status || 'unknown')
+      const statusBadgeColor = getOrderColor(order.status)
+      
       const infoWindow = new window.google.maps.InfoWindow({
         content: `
-          <div style="padding: 12px; font-family: system-ui;">
-            <h3 style="margin: 0 0 4px 0; font-weight: 600; color: #1f2937;">${order.customer_name || 'Cliente'}</h3>
-            <p style="margin: 0; font-size: 14px; color: #6b7280;">Status: ${statusText}</p>
+          <div style="padding: 16px; font-family: system-ui; min-width: 220px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+              <div style="
+                width: 48px; 
+                height: 48px; 
+                background: linear-gradient(135deg, ${categoryColor}, ${categoryColor}dd);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              ">
+                ${displayEmoji}
+              </div>
+              <div style="flex: 1;">
+                <h3 style="margin: 0; font-weight: 600; color: #1f2937; font-size: 16px;">${order.customer_name || 'Cliente'}</h3>
+                <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280;">
+                  ${order.establishment_type?.name || 'Pedido de Entrega'}
+                </p>
+              </div>
+            </div>
+            <div style="
+              display: inline-flex;
+              align-items: center;
+              gap: 6px;
+              padding: 6px 12px;
+              background: linear-gradient(135deg, ${statusBadgeColor}20, ${statusBadgeColor}10);
+              border-radius: 20px;
+              border: 1px solid ${statusBadgeColor}40;
+            ">
+              <div style="
+                width: 8px;
+                height: 8px;
+                background: ${statusBadgeColor};
+                border-radius: 50%;
+              "></div>
+              <span style="font-size: 12px; color: #374151; font-weight: 500;">${statusText}</span>
+            </div>
           </div>
         `
       })

@@ -33,6 +33,10 @@ interface Order {
   status: string
   value: number
   created_at: string
+  establishment_type?: {
+    name: string
+    emoji: string
+  }
 }
 
 export default function MapaCompletoPage() {
@@ -101,19 +105,37 @@ export default function MapaCompletoPage() {
 
       setOrganizations(organizations)
 
-      // Buscar todos os pedidos das organizações
+      // Buscar todos os pedidos das organizações COM dados da categoria
       const orgIds = organizations.map(org => org.id)
       let orders: Order[] = []
       
       if (orgIds.length > 0) {
         const { data: ordersData } = await supabase
           .from('orders')
-          .select('*')
+          .select(`
+            *,
+            establishment_types (
+              name,
+              emoji
+            )
+          `)
           .in('organization_id', orgIds)
           .order('created_at', { ascending: false })
           .limit(200) // Limitar para performance
 
-        orders = ordersData || []
+        orders = ordersData?.map((order: any) => ({
+          id: order.id,
+          customer_name: order.customer_name,
+          delivery_latitude: order.delivery_latitude,
+          delivery_longitude: order.delivery_longitude,
+          status: order.status,
+          value: order.value,
+          created_at: order.created_at,
+          establishment_type: order.establishment_types ? {
+            name: order.establishment_types.name,
+            emoji: order.establishment_types.emoji
+          } : undefined
+        })) || []
       }
 
       setOrders(orders)
