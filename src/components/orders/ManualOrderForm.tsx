@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { ActiveDriverSelector } from './ActiveDriverSelector'
 import { AddressSearchMap } from '@/components/map/AddressSearchMap'
+import { OrderMediaCapture, OrderMedia } from './OrderMediaCapture'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { supabase } from '@/lib/supabase'
 import { ArrowLeft, FileText, Search, Package, Plus, Minus, UserPlus, Hash, MapPin, Truck } from 'lucide-react'
@@ -90,6 +91,7 @@ export function ManualOrderForm() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
+  const [orderMedia, setOrderMedia] = useState<OrderMedia[]>([]) // NOVO: Estado para mídias
   
   // Estados para novos itens
   const [newProductName, setNewProductName] = useState('')
@@ -150,6 +152,33 @@ export function ManualOrderForm() {
     
     setNewProductPriceDisplay(formatted)
     setNewProductPrice(numericValue)
+  }
+
+  // NOVA FUNÇÃO: Upload de arquivo para Supabase Storage
+  const uploadFile = async (file: File, orderId: string): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${orderId}/${Date.now()}.${fileExt}`
+      
+      const { data, error } = await supabase.storage
+        .from('order-media')
+        .upload(fileName, file)
+
+      if (error) {
+        console.error('Erro no upload:', error)
+        return null
+      }
+
+      // Obter URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('order-media')
+        .getPublicUrl(fileName)
+
+      return publicUrl
+    } catch (error) {
+      console.error('Erro no upload:', error)
+      return null
+    }
   }
 
   useEffect(() => {
@@ -231,7 +260,7 @@ export function ManualOrderForm() {
     // Preencher campos do formulário
     form.setValue('address_street', address.street)
     form.setValue('address_number', address.number)
-    form.setValue('address_neighborhood', address.neighborhood)
+    form.setValue('address_neighborhoo', address.neighborhood)
     form.setValue('address_city', address.city)
   }
 
@@ -269,6 +298,12 @@ export function ManualOrderForm() {
     // Selecionar a nova categoria
     form.setValue('establishment_type_id', newCategory.id)
     toast.success(`Categoria "${newCategory.name}" criada e selecionada`)
+  }
+
+  // NOVO HANDLER: Para mudanças nas mídias
+  const handleMediaChange = (media: OrderMedia[]) => {
+    setOrderMedia(media)
+    console.log('📸 [MANUAL ORDER] Mídias atualizadas:', media.length)
   }
 
   const addOrderItem = () => {
@@ -394,12 +429,48 @@ export function ManualOrderForm() {
         if (itemsError) throw itemsError
       }
 
+      // NOVO: Salvar mídias do pedido
+      if (orderMedia.length > 0) {
+        console.log('📸 [MANUAL ORDER] Salvando mídias...')
+        
+        for (const media of orderMedia) {
+          let mediaUrl = null
+          
+          // Upload de arquivo se necessário
+          if (media.file && (media.type === 'photo' || media.type === 'audio')) {
+            mediaUrl = await uploadFile(media.file, order.id)
+            if (!mediaUrl) {
+              console.warn('Falha no upload da mídia:', media.fileName)
+              continue
+            }
+          }
+          
+          // Salvar registro da mídia no banco
+          const { error: mediaError } = await supabase
+            .from('order_media')
+            .insert({
+              order_id: order.id,
+              media_type: media.type,
+              media_url: mediaUrl,
+              content: media.content || null,
+              file_name: media.fileName || null,
+              file_size: media.size || null
+            })
+          
+          if (mediaError) {
+            console.error('Erro ao salvar mídia:', mediaError)
+          }
+        }
+        
+        console.log('✅ [MANUAL ORDER] Mídias salvas')
+      }
+
       // MODIFICADO: Eventos baseados se tem entregador ou não
       const events = [
         {
           order_id: order.id,
           event_type: 'created',
-          description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}`
+          description: `Pedido manual criado para ${data.customer_name}${data.order_number ? ` - Nº ${data.order_number}` : ''}${orderMedia.length > 0 ? ` (${orderMedia.length} mídia(s) anexada(s))` : ''}`
         }
       ]
 
@@ -870,6 +941,12 @@ export function ManualOrderForm() {
               </div>
             </CardContent>
           </Card>
+
+          {/* NOVO: Componente de Mídias */}
+          <OrderMediaCapture
+            onMediaChange={handleMediaChange}
+            disabled={loading}
+          />
 
           {/* Botão Criar Pedido */}
           <div className="flex gap-4">
