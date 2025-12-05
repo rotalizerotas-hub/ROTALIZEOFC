@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, Plus, Search, Sparkles, X } from "lucide-react"
+import { Check, ChevronsUpDown, Plus, Search, Sparkles, X, Pizza, Beef, Wine, Droplets, Wrench, Scissors, Coffee, Salad, ShoppingCart, Store, Pill, Package, FileText, Briefcase, IceCream, Cake, Utensils, Fish, Sandwich, Candy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,6 +33,30 @@ interface CategorySelectProps {
   allowCreate?: boolean
   onCreateNew?: (searchTerm: string) => void
 }
+
+// Mapeamento de nomes de ícones para componentes
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Pizza,
+  Beef,
+  Wine,
+  Droplets,
+  Wrench,
+  Scissors,
+  Coffee,
+  Salad,
+  ShoppingCart,
+  Store,
+  Pill,
+  Package,
+  FileText,
+  Briefcase,
+  IceCream,
+  Cake,
+  Utensils,
+  Fish,
+  Sandwich,
+  Candy,
+};
 
 export function CategorySelect({
   options,
@@ -83,6 +107,11 @@ export function CategorySelect({
     )
   }
 
+  const getIconComponent = (iconName: string) => {
+    const IconComponent = iconMap[iconName] || Store; // Store como fallback
+    return IconComponent;
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -95,7 +124,9 @@ export function CategorySelect({
           {selectedOption ? (
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/10 to-primary/20 flex items-center justify-center">
-                <span className="text-lg">{selectedOption.emoji}</span>
+                {React.createElement(getIconComponent(selectedOption.emoji), { 
+                  className: "h-5 w-5 text-primary" 
+                })}
               </div>
               <span className="font-medium">{selectedOption.label}</span>
             </div>
@@ -167,43 +198,46 @@ export function CategorySelect({
                 <div className="text-xs font-medium text-gray-600 px-2 py-1 mb-1">
                   {filteredOptions.length} categoria{filteredOptions.length !== 1 ? 's' : ''} encontrada{filteredOptions.length !== 1 ? 's' : ''}
                 </div>
-                {filteredOptions.map((option) => (
-                  <div
-                    key={option.value}
-                    className="cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-gray-200 bg-white"
-                    onClick={() => handleSelect(option.value)}
-                  >
-                    <div className="flex items-center gap-3 w-full pointer-events-none">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 group-hover:from-blue-200 group-hover:to-blue-300 flex items-center justify-center transition-all duration-150">
-                        <span className="text-lg">{option.emoji}</span>
-                      </div>
-                      <div className="flex-1">
-                        <span className="font-medium text-sm text-gray-900">
-                          {highlightMatch(option.label, searchValue)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check
-                          className={cn(
-                            "h-4 w-4 text-blue-600 transition-opacity duration-150",
-                            value === option.value ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleSelect(option.value)
-                          }}
-                          className="h-7 px-3 text-xs font-medium hover:bg-blue-600 hover:text-white transition-colors pointer-events-auto border-blue-300 text-blue-700"
-                        >
-                          Usar
-                        </Button>
+                {filteredOptions.map((option) => {
+                  const IconComponent = getIconComponent(option.emoji);
+                  return (
+                    <div
+                      key={option.value}
+                      className="cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all duration-150 px-3 py-3 rounded-lg mx-1 my-0.5 group border border-gray-200 bg-white"
+                      onClick={() => handleSelect(option.value)}
+                    >
+                      <div className="flex items-center gap-3 w-full pointer-events-none">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 group-hover:from-blue-200 group-hover:to-blue-300 flex items-center justify-center transition-all duration-150">
+                          <IconComponent className="h-5 w-5 text-blue-700" />
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium text-sm text-gray-900">
+                            {highlightMatch(option.label, searchValue)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check
+                            className={cn(
+                              "h-4 w-4 text-blue-600 transition-opacity duration-150",
+                              value === option.value ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSelect(option.value)
+                            }}
+                            className="h-7 px-3 text-xs font-medium hover:bg-blue-600 hover:text-white transition-colors pointer-events-auto border-blue-300 text-blue-700"
+                          >
+                            Usar
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CommandGroup>
             )}
             

@@ -11,35 +11,35 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
-import { AlertCircle, Check, Loader2 } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Pizza, Beef, Wine, Droplets, Wrench, Scissors, Coffee, Salad, ShoppingCart, Store, Pill, Package, FileText, Briefcase, IceCream, Cake, Utensils, Fish, Sandwich, Candy } from 'lucide-react'
 
-// Lista de ícones emoji comuns para categorias de estabelecimento
-const EMOJI_OPTIONS = [
-  { emoji: '🍕', name: 'Pizza' },
-  { emoji: '🍔', name: 'Hambúrguer' },
-  { emoji: '🍗', name: 'Frango' },
-  { emoji: '🍣', name: 'Sushi' },
-  { emoji: '🍲', name: 'Refeição' },
-  { emoji: '🍝', name: 'Massa' },
-  { emoji: '🥙', name: 'Kebab' },
-  { emoji: '🍰', name: 'Doce' },
-  { emoji: '🧁', name: 'Confeitaria' },
-  { emoji: '🍦', name: 'Sorvete' },
-  { emoji: '☕', name: 'Café' },
-  { emoji: '🥗', name: 'Salada' },
-  { emoji: '🍹', name: 'Bebidas' },
-  { emoji: '🥤', name: 'Bebidas rápidas' },
-  { emoji: '🛒', name: 'Mercado' },
-  { emoji: '🏪', name: 'Loja' },
-  { emoji: '💊', name: 'Farmácia' },
-  { emoji: '📦', name: 'Pacote' },
-  { emoji: '📝', name: 'Documento' },
-  { emoji: '💼', name: 'Trabalho' },
+// Lista de ícones bonitos e realistas para categorias de estabelecimento
+const ICON_OPTIONS = [
+  { icon: Pizza, name: 'Pizza', iconName: 'Pizza' },
+  { icon: Beef, name: 'Hambúrguer', iconName: 'Beef' },
+  { icon: Utensils, name: 'Frango', iconName: 'Utensils' },
+  { icon: Fish, name: 'Sushi', iconName: 'Fish' },
+  { icon: Utensils, name: 'Refeição', iconName: 'Utensils' },
+  { icon: Utensils, name: 'Massa', iconName: 'Utensils' },
+  { icon: Sandwich, name: 'Kebab', iconName: 'Sandwich' },
+  { icon: Cake, name: 'Doce', iconName: 'Cake' },
+  { icon: Cake, name: 'Confeitaria', iconName: 'Cake' },
+  { icon: IceCream, name: 'Sorvete', iconName: 'IceCream' },
+  { icon: Coffee, name: 'Café', iconName: 'Coffee' },
+  { icon: Salad, name: 'Salada', iconName: 'Salad' },
+  { icon: Coffee, name: 'Bebidas', iconName: 'Coffee' },
+  { icon: Coffee, name: 'Bebidas rápidas', iconName: 'Coffee' },
+  { icon: ShoppingCart, name: 'Mercado', iconName: 'ShoppingCart' },
+  { icon: Store, name: 'Loja', iconName: 'Store' },
+  { icon: Pill, name: 'Farmácia', iconName: 'Pill' },
+  { icon: Package, name: 'Pacote', iconName: 'Package' },
+  { icon: FileText, name: 'Documento', iconName: 'FileText' },
+  { icon: Briefcase, name: 'Trabalho', iconName: 'Briefcase' },
 ];
 
 const categorySchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres'),
-  emoji: z.string().min(1, 'Selecione um emoji'), 
+  icon: z.string().min(1, 'Selecione um ícone'), 
 });
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
@@ -58,19 +58,19 @@ export function CreateCategoryDialog({
   searchTerm = '' 
 }: CreateCategoryDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedEmoji, setSelectedEmoji] = useState<string>('');
+  const [selectedIcon, setSelectedIcon] = useState<string>('');
   
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categorySchema),
     defaultValues: {
       name: searchTerm,
-      emoji: '',
+      icon: '',
     },
   });
 
-  const handleEmojiSelect = (emoji: string) => {
-    setSelectedEmoji(emoji);
-    form.setValue('emoji', emoji);
+  const handleIconSelect = (iconName: string) => {
+    setSelectedIcon(iconName);
+    form.setValue('icon', iconName);
   };
 
   const onSubmit = async (values: CategoryFormValues) => {
@@ -104,7 +104,7 @@ export function CreateCategoryDialog({
         .from('establishment_types')
         .insert({
           name: values.name,
-          emoji: values.emoji,
+          emoji: values.icon, // Agora salva o nome do ícone
           icon_url: '', // Placeholder para um ícone padrão
         })
         .select()
@@ -120,7 +120,7 @@ export function CreateCategoryDialog({
         onCategoryCreated({
           id: data.id,
           name: data.name,
-          emoji: data.emoji,
+          emoji: data.emoji, // Retorna o nome do ícone
         });
       }
       
@@ -159,31 +159,34 @@ export function CreateCategoryDialog({
               )}
             </div>
 
-            {/* Seleção de Emoji */}
+            {/* Seleção de Ícone */}
             <div className="space-y-2">
               <Label>Ícone</Label>
-              <input type="hidden" {...form.register('emoji')} />
+              <input type="hidden" {...form.register('icon')} />
 
               <div className="grid grid-cols-5 gap-2 mt-2">
-                {EMOJI_OPTIONS.map((option) => (
-                  <button
-                    key={option.emoji}
-                    type="button"
-                    onClick={() => handleEmojiSelect(option.emoji)}
-                    className={`
-                      h-10 text-xl flex items-center justify-center rounded-md
-                      ${selectedEmoji === option.emoji 
-                        ? 'bg-blue-100 border-2 border-blue-500' 
-                        : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'}
-                    `}
-                    title={option.name}
-                  >
-                    {option.emoji}
-                  </button>
-                ))}
+                {ICON_OPTIONS.map((option) => {
+                  const IconComponent = option.icon;
+                  return (
+                    <button
+                      key={option.iconName}
+                      type="button"
+                      onClick={() => handleIconSelect(option.iconName)}
+                      className={`
+                        h-12 w-12 flex items-center justify-center rounded-lg transition-all duration-200
+                        ${selectedIcon === option.iconName 
+                          ? 'bg-blue-100 border-2 border-blue-500 shadow-md' 
+                          : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-gray-300'}
+                      `}
+                      title={option.name}
+                    >
+                      <IconComponent className="h-6 w-6 text-gray-700" />
+                    </button>
+                  );
+                })}
               </div>
-              {form.formState.errors.emoji && (
-                <p className="text-sm text-red-500">{form.formState.errors.emoji.message}</p>
+              {form.formState.errors.icon && (
+                <p className="text-sm text-red-500">{form.formState.errors.icon.message}</p>
               )}
             </div>
           </div>
