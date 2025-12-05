@@ -121,11 +121,14 @@ export function CategorySelect({
               {filteredOptions.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.value}
+                  value={option.label}
                   onSelect={() => handleSelect(option.value)}
-                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors duration-150 px-3 py-2"
                 >
-                  <div className="flex items-center gap-3 flex-1">
+                  <div 
+                    className="flex items-center gap-3 flex-1 w-full"
+                    onClick={() => handleSelect(option.value)}
+                  >
                     <span className="text-lg">{option.emoji}</span>
                     <span className="flex-1">{option.label}</span>
                     <Check
@@ -141,10 +144,14 @@ export function CategorySelect({
             {allowCreate && searchValue.trim() && filteredOptions.length === 0 && (
               <CommandGroup>
                 <CommandItem
+                  value={searchValue}
                   onSelect={handleCreateNew}
-                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors duration-150 px-3 py-2"
                 >
-                  <div className="flex items-center gap-3 flex-1">
+                  <div 
+                    className="flex items-center gap-3 flex-1 w-full"
+                    onClick={handleCreateNew}
+                  >
                     <Plus className="h-4 w-4" />
                     <span>Criar categoria "{searchValue}"</span>
                   </div>
