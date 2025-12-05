@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -376,7 +376,7 @@ export function OrderMediaCapture({ onMediaChange, disabled = false }: OrderMedi
   }
 
   // Verificar permissões ao montar o componente
-  React.useEffect(() => {
+  useEffect(() => {
     checkPermissions()
   }, [])
 
