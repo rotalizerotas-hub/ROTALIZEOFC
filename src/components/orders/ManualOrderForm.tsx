@@ -94,6 +94,7 @@ export function ManualOrderForm() {
   // Estados para novos itens
   const [newProductName, setNewProductName] = useState('')
   const [newProductPrice, setNewProductPrice] = useState(0)
+  const [newProductPriceDisplay, setNewProductPriceDisplay] = useState('') // NOVO: Para exibição formatada
   const [newItemQuantity, setNewItemQuantity] = useState(1)
   const [selectedProductId, setSelectedProductId] = useState('')
 
@@ -114,6 +115,42 @@ export function ManualOrderForm() {
       order_number: '',
     },
   })
+
+  // NOVA FUNÇÃO: Formatação de moeda
+  const formatCurrency = (value: string): string => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '')
+    
+    // Se não há números, retorna vazio
+    if (!numbers) return ''
+    
+    // Converte para número e divide por 100 para ter centavos
+    const amount = parseInt(numbers) / 100
+    
+    // Formata como moeda brasileira
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+      minimumFractionDigits: 2
+    }).format(amount)
+  }
+
+  // NOVA FUNÇÃO: Converter moeda formatada para número
+  const parseCurrency = (value: string): number => {
+    const numbers = value.replace(/\D/g, '')
+    if (!numbers) return 0
+    return parseInt(numbers) / 100
+  }
+
+  // NOVO HANDLER: Para mudanças no campo de preço
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value
+    const formatted = formatCurrency(inputValue)
+    const numericValue = parseCurrency(inputValue)
+    
+    setNewProductPriceDisplay(formatted)
+    setNewProductPrice(numericValue)
+  }
 
   useEffect(() => {
     loadInitialData()
@@ -261,6 +298,7 @@ export function ManualOrderForm() {
       setOrderItems([...orderItems, newItem])
       setNewProductName('')
       setNewProductPrice(0)
+      setNewProductPriceDisplay('') // LIMPAR DISPLAY FORMATADO
       setNewItemQuantity(1)
     }
   }
@@ -766,12 +804,9 @@ export function ManualOrderForm() {
                         className="rounded-xl flex-1"
                       />
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newProductPrice}
-                        onChange={(e) => setNewProductPrice(parseFloat(e.target.value) || 0)}
-                        placeholder="Preço"
+                        value={newProductPriceDisplay}
+                        onChange={handlePriceChange}
+                        placeholder="R$ 0,00"
                         className="rounded-xl w-24"
                       />
                       <Input
