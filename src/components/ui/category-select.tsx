@@ -139,8 +139,8 @@ export function CategorySelect({
           <CommandList className="max-h-[320px] overflow-y-auto p-2">
             <CommandEmpty className="py-8 text-center">
               <div className="space-y-3">
-                <div className="w-16 h-16 mx-auto rounded-full bg-muted/50 flex items-center justify-center">
-                  <Search className="h-6 w-6 text-muted-foreground" />
+                <div className="w-16 h-16 mx-auto rounded-full bg-green-100 flex items-center justify-center">
+                  <Plus className="h-8 w-8 text-green-600" />
                 </div>
                 <div>
                   <p className="font-medium text-sm">Nenhuma categoria encontrada</p>
